@@ -2,7 +2,8 @@ import platform
 import mmap
 import json
 
-class JsonReader:
+
+class JsonReader(object):
     def __init__(self, filename, channels=[0,1,2,3]):
         self.f = open(filename, "rb")
         self.channels = channels
@@ -15,7 +16,7 @@ class JsonReader:
         line = map.readline()
         while line:
             o = json.loads(line)
-            if o["port"] in self.channels:
+            if o["metadata"]["port"] in self.channels:
                 yield o
             line = map.readline()
         map.close()
