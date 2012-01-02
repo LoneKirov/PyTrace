@@ -57,9 +57,20 @@ class CCT(Field):
                     cur[len(cur) - 1].sTime() - cur[0].sTime()
             )
 
+class CommandType(Field):
+    def __init__(self):
+        def valueFn(self, prev, cur, next):
+            if hasattr(cur[0], 'isRead') and cur[0].isRead():
+                return 'R'
+            elif hasattr(cur[0], 'isWrite') and cur[0].isWrite():
+                return 'W'
+            else:
+                return 0
+        super(CommandType, self).__init__('Cmd', valueFn)
+
 ALL_FIELDS = [
-        Time(True), Time(False), ID(True), ID(False), InterCmdTime(), LBA(),
-        Length(), FUA(), CCT()
+        Time(True), Time(False), ID(True), ID(False), CommandType(),
+        InterCmdTime(), LBA(), Length(), FUA(), CCT()
     ]
 
 def commandsToCSV(fName, cmds, fields = ALL_FIELDS):

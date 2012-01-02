@@ -85,6 +85,9 @@ class Smart(FISRegH2D):
         return self.eventData()[7]
 
 class WriteFPDMAQueued(FISRegH2D):
+    def isWrite(self):
+        return True
+
     def sectorCount(self):
         data = self.eventData()
         count = int(0)
@@ -101,6 +104,9 @@ class WriteFPDMAQueued(FISRegH2D):
         return (self.eventData()[11] & mask) == mask
 
 class ReadFPDMAQueued(FISRegH2D):
+    def isRead(self):
+        return True
+
     def sectorCount(self):
         data = self.eventData()
         count = int(0)
