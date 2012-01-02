@@ -16,7 +16,7 @@ class Time(Field):
     def __init__(self, isStart):
         name = 'Start Time' if isStart else 'End Time'
         def valueFn(self, prev, cur, next):
-            return cur[0].sTime() if isStart else cur[len(cur) - 1].eTime() 
+            return cur[0].sTime() if isStart else cur[len(cur) - 1].sTime() 
         super(Time, self).__init__(name, valueFn)
 
 class ID(Field):
@@ -54,7 +54,7 @@ class CCT(Field):
     def __init__(self):
         super(CCT, self).__init__('CCT',
                 lambda self, prev, cur, next:
-                    cur[len(cur) - 1].eTime() - cur[0].sTime()
+                    cur[len(cur) - 1].sTime() - cur[0].sTime()
             )
 
 ALL_FIELDS = [
