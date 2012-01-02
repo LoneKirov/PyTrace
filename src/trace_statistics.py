@@ -50,10 +50,16 @@ class InterCmdTime(Field):
             return 0 if prev is None else cur[0].sTime() - prev[0].sTime()
         super(InterCmdTime, self).__init__('InterCmdTime', valueFn)
 
+class CCT(Field):
+    def __init__(self):
+        super(CCT, self).__init__('CCT',
+                lambda self, prev, cur, next:
+                    cur[len(cur) - 1].eTime() - cur[0].sTime()
+            )
 
 ALL_FIELDS = [
         Time(True), Time(False), ID(True), ID(False), InterCmdTime(), LBA(),
-        FUA(), Length()
+        Length(), FUA(), CCT()
     ]
 
 def commandsToCSV(fName, cmds, fields = ALL_FIELDS):
