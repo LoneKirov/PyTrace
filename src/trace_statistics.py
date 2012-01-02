@@ -1,13 +1,82 @@
 import csv
+import copy
 
-def commandsToCSV(fName, cmds):
+class Field(object):
+    def __init__(self, name, valueFn):
+        self._name = name
+        self._valueFn = valueFn
+
+    def name(self):
+        return self._name
+
+    def value(self, prev, cur, next):
+        return self._valueFn(self, prev, cur, next)
+
+class Time(Field):
+    def __init__(self, isStart):
+        name = 'Start Time' if isStart else 'End Time'
+        def valueFn(self, prev, cur, next):
+            return cur[0].sTime() if isStart else cur[len(cur) - 1].eTime() 
+        super(Time, self).__init__(name, valueFn)
+
+class ID(Field):
+    def __init__(self, isStart):
+        name = 'ID' if isStart else 'End ID'
+        def valueFn(self, prev, cur, next):
+            return cur[0].id() if isStart else cur[len(cur) - 1].id() 
+        super(ID, self).__init__(name, valueFn)
+
+class LBA(Field):
+    def __init__(self):
+        super(LBA, self).__init__('LBA', lambda self, prev, cur, next: cur[0].lba())
+
+class FUA(Field):
+    def __init__(self):
+        super(FUA, self).__init__('FUA',
+                lambda self, prev, cur, next:
+                    'Y' if hasattr(cur[0], "fua") and cur[0].fua() else 'N'
+            )
+
+class Length(Field):
+    def __init__(self):
+        super(Length, self).__init__('length',
+                lambda self, prev, cur, next:
+                    cur[0].sectorCount() if hasattr(cur[0], "sectorCount") else 0
+            )
+
+class InterCmdTime(Field):
+    def __init__(self):
+        def valueFn(self, prev, cur, next):
+            return 0 if prev is None else cur[0].sTime() - prev[0].sTime()
+        super(InterCmdTime, self).__init__('InterCmdTime', valueFn)
+
+
+ALL_FIELDS = [
+        Time(True), Time(False), ID(True), ID(False), InterCmdTime(), LBA(),
+        FUA(), Length()
+    ]
+
+def commandsToCSV(fName, cmds, fields = ALL_FIELDS):
+    fields = map(lambda f: copy.deepcopy(f), fields)
+
     with open(fName, 'wb') as f:
         writer = csv.writer(f, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(['Start Time', 'End Time', 'LBA', 'FUA', 'length'])
+        writer.writerow(map(lambda f: f.name(), fields))
 
-        prev = None
-        for cmd in cmds:
-            isFUA = 'Y' if hasattr(cmd[0], "fua") and cmd[0].fua() else 'N'
-            length = cmd[0].sectorCount() if hasattr(cmd[0], "sectorCount") else 0
-            writer.writerow([cmd[0].sTime(), cmd[len(cmd) - 1].eTime(), cmd[0].lba(),
-                isFUA, length])
+        def cmdIter(cmds):
+            prev = None
+            cur = None
+            next = None
+            for cmd in cmds:
+                prev = cur
+                cur = next
+                next = cmd
+                if cur is not None:
+                    yield [prev, cur, next]
+            prev = cur
+            cur = next
+            next = None
+            yield [prev, cur, next]
+
+        for t in cmdIter(cmds):
+            writer.writerow(map(lambda f: f.value(t[0], t[1], t[2]), fields))
