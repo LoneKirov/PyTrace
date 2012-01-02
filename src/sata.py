@@ -149,10 +149,12 @@ def parseCommands(reader):
                     inFlightUnqueued = [ smart ]
             elif command == 'WRITE_FPDMA_QUEUED':
                 write = WriteFPDMAQueued(e)
+                write.qDepth = len(inFlightQueued)
                 inFlightQueued[write.queueTag()] = [ write ]
                 lastQueued = write
             elif command == 'READ_FPDMA_QUEUED':
                 read = ReadFPDMAQueued(e)
+                read.qDepth = len(inFlightQueued)
                 inFlightQueued[read.queueTag()] = [ read ]
                 lastQueued = read
 

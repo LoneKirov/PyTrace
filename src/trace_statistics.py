@@ -68,9 +68,16 @@ class CommandType(Field):
                 return 0
         super(CommandType, self).__init__('Cmd', valueFn)
 
+class qDepth(Field):
+    def __init__(self):
+        super(qDepth, self).__init__('qDepth',
+                lambda self, prev, cur, next:
+                    cur[0].qDepth if hasattr(cur[0], 'qDepth') else 0
+            )
+
 ALL_FIELDS = [
         Time(True), Time(False), ID(True), ID(False), CommandType(),
-        InterCmdTime(), LBA(), Length(), FUA(), CCT()
+        InterCmdTime(), LBA(), Length(), FUA(), CCT(), qDepth()
     ]
 
 def commandsToCSV(fName, cmds, fields = ALL_FIELDS):
