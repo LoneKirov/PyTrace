@@ -1,26 +1,26 @@
 class XgigCommand(object):
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, event):
+        self.__event = event
 
     def sTime(self):
-        return self.data["metadata"]["sTimestamp"]
+        return self.__event["metadata"]["sTimestamp"]
 
     def eTime(self):
-        return self.data["metadata"]["eTimestamp"]
+        return self.__event["metadata"]["eTimestamp"]
 
     def id(self):
-        return self.data["metadata"]["id"]
+        return self.__event["metadata"]["id"]
 
     def port(self):
-        return self.data["metadata"]["port"]
+        return self.__event["metadata"]["port"]
 
     def eventData(self):
-        return self.data["eventData"]
+        return self.__event["eventData"]
 
     def getType(self):
-        if "sata" in self.data:
+        if "sata" in self.__event:
             return "sata"
-        elif "scsi" in self.data:
+        elif "scsi" in self.__event:
             return "scsi"
         else:
             return None

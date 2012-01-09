@@ -3,14 +3,14 @@ import copy
 
 class Field(object):
     def __init__(self, name, valueFn):
-        self._name = name
-        self._valueFn = valueFn
+        self.__name = name
+        self.__valueFn = valueFn
 
     def name(self):
-        return self._name
+        return self.__name
 
     def value(self, prev, cur, next):
-        return self._valueFn(self, prev, cur, next)
+        return self.__valueFn(self, prev, cur, next)
 
 class Time(Field):
     def __init__(self, isStart):
@@ -72,7 +72,7 @@ class qDepth(Field):
     def __init__(self):
         super(qDepth, self).__init__('qDepth',
                 lambda self, prev, cur, next:
-                    cur[0].qDepth if hasattr(cur[0], 'qDepth') else 0
+                    cur[0].qDepth() if hasattr(cur[0], 'qDepth') else 0
             )
 
 ALL_FIELDS = [

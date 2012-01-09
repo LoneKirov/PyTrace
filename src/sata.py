@@ -85,6 +85,10 @@ class Smart(FISRegH2D):
         return self.eventData()[7]
 
 class WriteFPDMAQueued(FISRegH2D):
+    def __init__(self, event, qDepth):
+        self.__qDepth = qDepth
+        super(WriteFPDMAQueued, self).__init__(event)
+
     def isWrite(self):
         return True
 
@@ -103,7 +107,14 @@ class WriteFPDMAQueued(FISRegH2D):
         mask = 1 << 7
         return (self.eventData()[11] & mask) == mask
 
+    def qDepth(self):
+        return self.__qDepth
+
 class ReadFPDMAQueued(FISRegH2D):
+    def __init__(self, event, qDepth):
+        self.__qDepth = qDepth
+        super(ReadFPDMAQueued, self).__init__(event)
+
     def isRead(self):
         return True
 
@@ -121,6 +132,9 @@ class ReadFPDMAQueued(FISRegH2D):
     def fua(self):
         mask = 1 << 7
         return (self.eventData()[11] & mask) == mask
+
+    def qDepth(self):
+        return self.__qDepth
 
 def parseCommands(reader):
     commands = []
@@ -148,13 +162,11 @@ def parseCommands(reader):
                     assert inFlightUnqueued is None
                     inFlightUnqueued = [ smart ]
             elif command == 'WRITE_FPDMA_QUEUED':
-                write = WriteFPDMAQueued(e)
-                write.qDepth = len(inFlightQueued)
+                write = WriteFPDMAQueued(e, len(inFlightQueued))
                 inFlightQueued[write.queueTag()] = [ write ]
                 lastQueued = write
             elif command == 'READ_FPDMA_QUEUED':
-                read = ReadFPDMAQueued(e)
-                read.qDepth = len(inFlightQueued)
+                read = ReadFPDMAQueued(e, len(inFlightQueued))
                 inFlightQueued[read.queueTag()] = [ read ]
                 lastQueued = read
 
