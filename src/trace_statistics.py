@@ -80,27 +80,31 @@ ALL_FIELDS = [
         InterCmdTime(), LBA(), Length(), FUA(), CCT(), qDepth()
     ]
 
-def commandsToCSV(fName, cmds, fields = ALL_FIELDS):
+def commandsToStats(cmds, fields = ALL_FIELDS):
     fields = map(lambda f: copy.deepcopy(f), fields)
 
+    def cmdIter(cmds):
+        prev = None
+        cur = None
+        next = None
+        for cmd in cmds:
+            prev = cur
+            cur = next
+            next = cmd
+            if cur is not None:
+                yield [prev, cur, next]
+        prev = cur
+        cur = next
+        next = None
+        yield [prev, cur, next]
+
+    for t in cmdIter(cmds):
+        yield dict(map(lambda f: (f.name(), f.value(t[0], t[1], t[2])), fields))
+
+def commandsToStatCSV(fName, cmds, fields = ALL_FIELDS):
     with open(fName, 'wb') as f:
         writer = csv.writer(f, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         writer.writerow(map(lambda f: f.name(), fields))
 
-        def cmdIter(cmds):
-            prev = None
-            cur = None
-            next = None
-            for cmd in cmds:
-                prev = cur
-                cur = next
-                next = cmd
-                if cur is not None:
-                    yield [prev, cur, next]
-            prev = cur
-            cur = next
-            next = None
-            yield [prev, cur, next]
-
-        for t in cmdIter(cmds):
-            writer.writerow(map(lambda f: f.value(t[0], t[1], t[2]), fields))
+        for stat in commandsToStats(cmds, fields):
+            writer.writerow(map(lambda f: stat[f.name()], fields))

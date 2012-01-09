@@ -2,6 +2,9 @@ class XgigCommand(object):
     def __init__(self, event):
         self.__event = event
 
+    def event(self):
+        return self.__event
+
     def sTime(self):
         return self.__event["metadata"]["sTimestamp"]
 
