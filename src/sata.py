@@ -1,4 +1,4 @@
-from xgig import XgigCommand
+from xgig import XgigCommand, ParsedCommand
 
 COMMANDS = {
     'SMART': 0xB0,
@@ -33,8 +33,9 @@ def getAndAssertKnown(v, m):
     return m[v]
 
 class FISCommand(XgigCommand):
-    def fisType(self):
-        return self.eventData()[4]
+    def __init__(self, event):
+        super(FISCommand, self).__init__(event)
+        self.fisType = self.eventData()[4]
 
 def parseLBA(data):
     lba = long(0)
@@ -53,18 +54,19 @@ def parseLBA(data):
 
 
 class FISRegH2D(FISCommand):
-    def lba(self):
-        return parseLBA(self.eventData())
-
-    def command(self):
-        return self.eventData()[6]
+    def __init__(self, event):
+        super(FISRegH2D, self).__init__(event)
+        self.lba = parseLBA(self.eventData())
+        self.command = self.eventData()[6]
 
 class FISRegD2H(FISCommand):
-    def lba(self):
-        return parseLBA(self.eventData())
+    def __init__(self, event):
+        super(FISRegD2H, self).__init__(event)
+        self.lba = parseLBA(self.eventData())
 
 class FISSetDeviceBits(FISCommand):
-    def acts(self):
+    def __init__(self, event):
+        super(FISSetDeviceBits, self).__init__(event)
         data = self.eventData()
         act = long(0)
         act = act | data[11]
@@ -78,63 +80,42 @@ class FISSetDeviceBits(FISCommand):
         for x in range(32):
             if act & (1 << x):
                 acts.append(x)
-        return acts
+        self.acts = acts
 
 class Smart(FISRegH2D):
-    def feature(self):
-        return self.eventData()[7]
+    def __init__(self, event):
+        super(Smart, self).__init__(event)
+        self.feature = self.eventData()[7]
 
 class WriteFPDMAQueued(FISRegH2D):
     def __init__(self, event, qDepth):
-        self.__qDepth = qDepth
         super(WriteFPDMAQueued, self).__init__(event)
+        self.qDepth = qDepth
 
-    def isWrite(self):
-        return True
-
-    def sectorCount(self):
         data = self.eventData()
         count = int(0)
         count = count | self.eventData()[15]
         count = count << 8
         count = count | self.eventData()[7]
-        return count
-
-    def queueTag(self):
-        return self.eventData()[16] >> 3
-
-    def fua(self):
+        self.sectorCount = count
+        self.queueTag = self.eventData()[16] >> 3
         mask = 1 << 7
-        return (self.eventData()[11] & mask) == mask
-
-    def qDepth(self):
-        return self.__qDepth
+        self.fua = (self.eventData()[11] & mask) == mask
 
 class ReadFPDMAQueued(FISRegH2D):
     def __init__(self, event, qDepth):
-        self.__qDepth = qDepth
         super(ReadFPDMAQueued, self).__init__(event)
+        self.qDepth = qDepth
 
-    def isRead(self):
-        return True
-
-    def sectorCount(self):
         data = self.eventData()
         count = int(0)
         count = count | self.eventData()[15]
         count = count << 8
         count = count | self.eventData()[7]
-        return count
-
-    def queueTag(self):
-        return self.eventData()[16] >> 3
-
-    def fua(self):
+        self.sectorCount = count
+        self.queueTag = self.eventData()[16] >> 3
         mask = 1 << 7
-        return (self.eventData()[11] & mask) == mask
-
-    def qDepth(self):
-        return self.__qDepth
+        self.fua = (self.eventData()[11] & mask) == mask
 
 def parseCommands(reader):
     commands = []
@@ -155,35 +136,35 @@ def parseCommands(reader):
 
             if command == 'SMART':
                 smart = Smart(e)
-                feature = getAndAssertKnown(smart.feature(), SMART)
+                feature = getAndAssertKnown(smart.feature, SMART)
                 if feature == 'READ_DATA':
-                    yield [ smart ]
+                    yield ParsedCommand([ smart ], False, 0)
                 elif feature == 'RETURN_STATUS':
                     assert inFlightUnqueued is None
-                    inFlightUnqueued = [ smart ]
+                    inFlightUnqueued = ParsedCommand([ smart ], False, 0)
             elif command == 'WRITE_FPDMA_QUEUED':
                 write = WriteFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[write.queueTag()] = [ write ]
+                inFlightQueued[write.queueTag] = ParsedCommand([ write ], True, 'W')
                 lastQueued = write
             elif command == 'READ_FPDMA_QUEUED':
                 read = ReadFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[read.queueTag()] = [ read ]
+                inFlightQueued[read.queueTag] = ParsedCommand([ read ], True, 'R')
                 lastQueued = read
 
         elif 'FIS_REG_D2H' == fisType:
             fisRegD2H = FISRegD2H(e)
             if inFlightUnqueued is not None:
-                assert inFlightUnqueued[0].lba() == fisRegD2H.lba()
-                inFlightUnqueued.append(fisRegD2H)
+                assert inFlightUnqueued.events[0].lba == fisRegD2H.lba
+                inFlightUnqueued.events.append(fisRegD2H)
                 yield inFlightUnqueued
                 inFlightUnqueued = None
             elif lastQueued is not None:
-                inFlightQueued[lastQueued.queueTag()].append(fisRegD2H)
+                inFlightQueued[lastQueued.queueTag].events.append(fisRegD2H)
                 lastQueued = None
         elif 'FIS_DEV_BITS' == fisType:
             bits = FISSetDeviceBits(e)
-            for act in bits.acts():
+            for act in bits.acts:
                 cmd = inFlightQueued[act]
                 del inFlightQueued[act]
-                cmd.append(bits)
+                cmd.events.append(bits)
                 yield cmd

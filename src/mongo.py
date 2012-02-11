@@ -1,4 +1,6 @@
 import pymongo
+import copy
+import xgig
 
 class MongoCaptureDatabase(object):
     def __init__(self, dbName, captureName, username, password):
@@ -35,3 +37,35 @@ class MongoCaptureDatabase(object):
         for stat in stats:
             statsCollection.insert(stat)
         self.closeConnection()
+
+    def getCommandsCollection(self):
+        return self.getDB()["%s_commands" % self.__captureName]
+
+    def importCommands(self, cmds):
+        cmdsCollection = self.getCommandsCollection()
+        cmdsCollection.drop()
+       
+        for cmd in cmds:
+            cmdsCollection.insert(self.serializeCommand(cmd))
+
+        self.closeConnection()
+
+    def serializeCommand(self, cmd):
+        cmd = copy.deepcopy(cmd)
+        for e in cmd.events:
+            del e._event
+        cmd.events = map(lambda e: e.__dict__, cmd.events)
+        return cmd.__dict__
+
+    def deserializeCommand(self, cmd):
+        cmd = copy.deepcopy(cmd)
+        oEvents = cmd["events"]
+        cmd["events"] = map(
+                lambda e: xgig.XgigCommand(self.getEventsCollection().find_one({"metadata.id" : e["eid"]})),
+                oEvents)
+        for i in range(len(oEvents)):
+            cmd["events"][i].__dict__.update(**oEvents[i])
+
+        pcmd = xgig.ParsedCommand()
+        pcmd.__dict__.update(**cmd)
+        return pcmd

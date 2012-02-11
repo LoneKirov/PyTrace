@@ -2,82 +2,79 @@ import csv
 import copy
 
 class Field(object):
-    def __init__(self, name, valueFn):
+    def __init__(self, name):
         self.__name = name
-        self.__valueFn = valueFn
 
     def name(self):
         return self.__name
 
-    def value(self, prev, cur, next):
-        return self.__valueFn(self, prev, cur, next)
-
 class Time(Field):
     def __init__(self, isStart):
+        self.__isStart = isStart
         name = 'Start Time' if isStart else 'End Time'
-        def valueFn(self, prev, cur, next):
-            return cur[0].sTime() if isStart else cur[len(cur) - 1].sTime() 
-        super(Time, self).__init__(name, valueFn)
+        super(Time, self).__init__(name)
+    def __call__(self, prev, cur, next):
+        return cur.sTime() if self.__isStart else cur.eTime() 
 
 class ID(Field):
     def __init__(self, isStart):
+        self.__isStart = isStart
         name = 'ID' if isStart else 'End ID'
-        def valueFn(self, prev, cur, next):
-            return cur[0].id() if isStart else cur[len(cur) - 1].id() 
-        super(ID, self).__init__(name, valueFn)
+        super(ID, self).__init__(name)
+    def __call__(self, prev, cur, next):
+        return cur.start().eid if self.__isStart else cur.end().eid
 
 class LBA(Field):
     def __init__(self):
-        super(LBA, self).__init__('LBA', lambda self, prev, cur, next: cur[0].lba())
+        super(LBA, self).__init__('LBA')
+    def __call__(self, prev, cur, next):
+        return cur.start().lba
 
 class FUA(Field):
     def __init__(self):
-        super(FUA, self).__init__('FUA',
-                lambda self, prev, cur, next:
-                    'Y' if hasattr(cur[0], "fua") and cur[0].fua() else 'N'
-            )
+        super(FUA, self).__init__('FUA')
+    def __call__(self, prev, cur, next):
+        return 'Y' if hasattr(cur.start(), "fua") and cur.start().fua else 'N'
 
 class Length(Field):
     def __init__(self):
-        super(Length, self).__init__('length',
-                lambda self, prev, cur, next:
-                    cur[0].sectorCount() if hasattr(cur[0], "sectorCount") else 0
-            )
+        super(Length, self).__init__('length')
+    def __call__(self, prev, cur, next):
+        return cur.start().sectorCount if hasattr(cur.start(), "sectorCount") else 0
 
 class InterCmdTime(Field):
     def __init__(self):
-        def valueFn(self, prev, cur, next):
-            return 0 if prev is None else cur[0].sTime() - prev[0].sTime()
-        super(InterCmdTime, self).__init__('InterCmdTime', valueFn)
+        super(InterCmdTime, self).__init__('InterCmdTime')
+    def __call__(self, prev, cur, next):
+        return 0 if prev is None else cur.sTime() - prev.sTime()
 
 class CCT(Field):
     def __init__(self):
-        super(CCT, self).__init__('CCT',
-                lambda self, prev, cur, next:
-                    cur[len(cur) - 1].sTime() - cur[0].sTime()
-            )
+        super(CCT, self).__init__('CCT')
+    def __call__(self, prev, cur, next):
+        return cur.eTime() - cur.sTime()
+
+class qCCT(Field):
+    def __init__(self):
+        super(qCCT, self).__init__('qCCT')
+    def __call__(self, prev, cur, next):
+        return cur.eTime() - prev.eTime() if prev != None else cur.eTime() - cur.sTime()
 
 class CommandType(Field):
     def __init__(self):
-        def valueFn(self, prev, cur, next):
-            if hasattr(cur[0], 'isRead') and cur[0].isRead():
-                return 'R'
-            elif hasattr(cur[0], 'isWrite') and cur[0].isWrite():
-                return 'W'
-            else:
-                return 0
-        super(CommandType, self).__init__('Cmd', valueFn)
+        super(CommandType, self).__init__('Cmd')
+    def __call__(self, prev, cur, next):
+        return cur.cmdType
 
 class qDepth(Field):
     def __init__(self):
-        super(qDepth, self).__init__('qDepth',
-                lambda self, prev, cur, next:
-                    cur[0].qDepth() if hasattr(cur[0], 'qDepth') else 0
-            )
+        super(qDepth, self).__init__('qDepth')
+    def __call__(self, prev, cur, next):
+        return cur.start().qDepth if cur.queued else 0
 
 ALL_FIELDS = [
         Time(True), Time(False), ID(True), ID(False), CommandType(),
-        InterCmdTime(), LBA(), Length(), FUA(), CCT(), qDepth()
+        InterCmdTime(), LBA(), Length(), FUA(), CCT(), qCCT(), qDepth()
     ]
 
 def commandsToStats(cmds, fields = ALL_FIELDS):
@@ -99,7 +96,7 @@ def commandsToStats(cmds, fields = ALL_FIELDS):
         yield [prev, cur, next]
 
     for t in cmdIter(cmds):
-        yield dict(map(lambda f: (f.name(), f.value(t[0], t[1], t[2])), fields))
+        yield dict(map(lambda f: (f.name(), f(t[0], t[1], t[2])), fields))
 
 def commandsToStatCSV(fName, cmds, fields = ALL_FIELDS):
     with open(fName, 'wb') as f:

@@ -1,29 +1,42 @@
 class XgigCommand(object):
     def __init__(self, event):
-        self.__event = event
+        self._event = event
+        self.sTime = event["metadata"]["sTimestamp"]
+        self.eTime = event["metadata"]["eTimestamp"]
+        self.eid = event["metadata"]["id"]
+        self.port = event["metadata"]["port"]
+        if "sata" in event:
+            self.protocol = "sata"
+        elif "scsi" in event:
+            self.protocol = "scsi"
+        else:
+            self.protocol = None
 
     def event(self):
-        return self.__event
-
-    def sTime(self):
-        return self.__event["metadata"]["sTimestamp"]
-
-    def eTime(self):
-        return self.__event["metadata"]["eTimestamp"]
-
-    def id(self):
-        return self.__event["metadata"]["id"]
-
-    def port(self):
-        return self.__event["metadata"]["port"]
+        return self._event
 
     def eventData(self):
-        return self.__event["eventData"]
+        return self.event()["eventData"]
 
-    def getType(self):
-        if "sata" in self.__event:
-            return "sata"
-        elif "scsi" in self.__event:
-            return "scsi"
+class ParsedCommand(object):
+    def __init__(self, events=[], queued=False, cmdType=0):
+        self.events = events
+        self.queued = queued
+        self.cmdType = cmdType
+
+    def start(self):
+        return self.events[0]
+    def sTime(self):
+        return self.start().sTime
+    def end(self):
+        return self.events[len(self.events) - 1]
+    def eTime(self):
+        return self.end().sTime
+    def ack(self):
+        if queued:
+            assert len(self.events) == 3
+            return self.events[1]
         else:
             return None
+    def ackTime(self):
+        return self.ack().sTime
