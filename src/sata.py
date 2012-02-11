@@ -7,7 +7,7 @@ COMMANDS = {
     'DATA_SET_MANAGEMENT' : 0x06,
     'FLUSH_CACHE_EXT' : 0xEA
 }
-COMMANDS.update(dict((v,k) for k, v in COMMANDS.iteritems()))
+COMMANDS.update(dict((v,k) for k, v in COMMANDS.items()))
 
 FIS_TYPES = {
     'UNKNOWN' : 0x00,
@@ -20,13 +20,13 @@ FIS_TYPES = {
     'FIS_PIO_SETUP' : 0x5F,
     'FIS_DEV_BITS' : 0xA1
 }
-FIS_TYPES.update(dict((v,k) for k, v in FIS_TYPES.iteritems()))
+FIS_TYPES.update(dict((v,k) for k, v in FIS_TYPES.items()))
 
 SMART = {
     'READ_DATA' : 0xD0,
     'RETURN_STATUS' : 0xDA
 }
-SMART.update(dict((v,k) for k, v in SMART.iteritems()))
+SMART.update(dict((v,k) for k, v in SMART.items()))
 
 def getAndAssertKnown(v, m):
     assert v in m, "Unknown value %s" % hex(v)
@@ -38,7 +38,7 @@ class FISCommand(XgigCommand):
         self.fisType = self.eventData()[4]
 
 def parseLBA(data):
-    lba = long(0)
+    lba = int(0)
     lba = lba | data[14]
     lba = lba << 8
     lba = lba | data[13]
@@ -68,7 +68,7 @@ class FISSetDeviceBits(FISCommand):
     def __init__(self, event):
         super(FISSetDeviceBits, self).__init__(event)
         data = self.eventData()
-        act = long(0)
+        act = int(0)
         act = act | data[11]
         act = act << 8
         act = act | data[10]

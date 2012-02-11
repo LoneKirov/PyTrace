@@ -14,9 +14,6 @@ class MongoCaptureDatabase(object):
         db = self.__connection[self.__dbName]
         return db
 
-    def closeConnection(self):
-        self.__connection.close()
-
     def getEventsCollection(self):
         return self.getDB()["%s_events" % self.__captureName]
 
@@ -26,7 +23,6 @@ class MongoCaptureDatabase(object):
         for e in events:
             eventsCollection.insert(e)
         eventsCollection.create_index("metadata.id")
-        self.closeConnection()
 
     def getStatsCollection(self):
         return self.getDB()["%s_stats" % self.__captureName]
@@ -36,7 +32,6 @@ class MongoCaptureDatabase(object):
         statsCollection.drop()
         for stat in stats:
             statsCollection.insert(stat)
-        self.closeConnection()
 
     def getCommandsCollection(self):
         return self.getDB()["%s_commands" % self.__captureName]
@@ -48,21 +43,19 @@ class MongoCaptureDatabase(object):
         for cmd in cmds:
             cmdsCollection.insert(self.serializeCommand(cmd))
 
-        self.closeConnection()
-
     def serializeCommand(self, cmd):
         cmd = copy.deepcopy(cmd)
         for e in cmd.events:
             del e._event
-        cmd.events = map(lambda e: e.__dict__, cmd.events)
+        cmd.events = list(map(lambda e: e.__dict__, cmd.events))
         return cmd.__dict__
 
     def deserializeCommand(self, cmd):
         cmd = copy.deepcopy(cmd)
         oEvents = cmd["events"]
-        cmd["events"] = map(
+        cmd["events"] = list(map(
                 lambda e: xgig.XgigCommand(self.getEventsCollection().find_one({"metadata.id" : e["eid"]})),
-                oEvents)
+                oEvents))
         for i in range(len(oEvents)):
             cmd["events"][i].__dict__.update(**oEvents[i])
 

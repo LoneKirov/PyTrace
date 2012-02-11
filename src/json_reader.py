@@ -15,7 +15,7 @@ class JsonReader(object):
         map = mmap.mmap(self.f.fileno(), 0, mmap.MAP_PRIVATE)
         line = map.readline()
         while line:
-            o = json.loads(line)
+            o = json.loads(str(line, "UTF-8"))
             if o["metadata"]["port"] in self.channels:
                 yield o
             line = map.readline()
