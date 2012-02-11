@@ -40,7 +40,7 @@ class Length(Field):
     def __init__(self):
         super(Length, self).__init__('length')
     def __call__(self, prev, cur, next):
-        return cur.start().sectorCount if hasattr(cur.start(), "sectorCount") else 0
+        return cur.start().sectorCount if hasattr(cur.start(), 'sectorCount') else 0
 
 class InterCmdTime(Field):
     def __init__(self):
@@ -78,7 +78,7 @@ ALL_FIELDS = [
     ]
 
 def commandsToStats(cmds, fields = ALL_FIELDS):
-    fields = map(lambda f: copy.deepcopy(f), fields)
+    fields = list(map(lambda f: copy.deepcopy(f), fields))
 
     def cmdIter(cmds):
         prev = None
@@ -99,9 +99,9 @@ def commandsToStats(cmds, fields = ALL_FIELDS):
         yield dict(map(lambda f: (f.name(), f(t[0], t[1], t[2])), fields))
 
 def commandsToStatCSV(fName, cmds, fields = ALL_FIELDS):
-    with open(fName, 'wb') as f:
+    with open(fName, 'w') as f:
         writer = csv.writer(f, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(map(lambda f: f.name(), fields))
+        writer.writerow(list(map(lambda f: f.name(), fields)))
 
         for stat in commandsToStats(cmds, fields):
-            writer.writerow(map(lambda f: stat[f.name()], fields))
+            writer.writerow(list(map(lambda f: stat[f.name()], fields)))
