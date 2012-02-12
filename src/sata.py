@@ -138,28 +138,31 @@ def parseCommands(reader):
                 smart = Smart(e)
                 feature = getAndAssertKnown(smart.feature, SMART)
                 if feature == 'READ_DATA':
-                    yield ParsedCommand([ smart ], False, 0)
+                    commands.append(ParsedCommand([ smart ], False, 0, True))
                 elif feature == 'RETURN_STATUS':
                     assert inFlightUnqueued is None
-                    inFlightUnqueued = ParsedCommand([ smart ], False, 0)
+                    inFlightUnqueued = ParsedCommand([ smart ], False, 0, False)
+                    commands.append(inFlightUnqueued)
             elif command == 'WRITE_FPDMA_QUEUED':
                 write = WriteFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[write.queueTag] = ParsedCommand([ write ], True, 'W')
-                lastQueued = write
+                inFlightQueued[write.queueTag] = ParsedCommand([ write ], True, 'W', False)
+                commands.append(inFlightQueued[write.queueTag])
+                lastQueued = write.queueTag
             elif command == 'READ_FPDMA_QUEUED':
                 read = ReadFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[read.queueTag] = ParsedCommand([ read ], True, 'R')
-                lastQueued = read
+                inFlightQueued[read.queueTag] = ParsedCommand([ read ], True, 'R', False)
+                commands.append(inFlightQueued[read.queueTag])
+                lastQueued = read.queueTag
 
         elif 'FIS_REG_D2H' == fisType:
             fisRegD2H = FISRegD2H(e)
             if inFlightUnqueued is not None:
                 assert inFlightUnqueued.events[0].lba == fisRegD2H.lba
                 inFlightUnqueued.events.append(fisRegD2H)
-                yield inFlightUnqueued
+                inFlightUnqueued.done = True
                 inFlightUnqueued = None
             elif lastQueued is not None:
-                inFlightQueued[lastQueued.queueTag].events.append(fisRegD2H)
+                inFlightQueued[lastQueued].events.append(fisRegD2H)
                 lastQueued = None
         elif 'FIS_DEV_BITS' == fisType:
             bits = FISSetDeviceBits(e)
@@ -167,4 +170,17 @@ def parseCommands(reader):
                 cmd = inFlightQueued[act]
                 del inFlightQueued[act]
                 cmd.events.append(bits)
+                cmd.done = True
+
+        commands.sort(key=lambda c: c.sTime())
+        while len(commands) != 0:
+            cmd = commands.pop(0)
+            if cmd.done:
                 yield cmd
+            else:
+                commands.append(cmd)
+                break
+            
+    commands.sort(key=lambda c: c.sTime())
+    for cmd in commands:
+        yield cmd

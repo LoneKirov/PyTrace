@@ -19,10 +19,11 @@ class XgigCommand(object):
         return self.event()["eventData"]
 
 class ParsedCommand(object):
-    def __init__(self, events=[], queued=False, cmdType=0):
+    def __init__(self, events=[], queued=False, cmdType=0, done=False):
         self.events = events
         self.queued = queued
         self.cmdType = cmdType
+        self.done = done
 
     def start(self):
         return self.events[0]
