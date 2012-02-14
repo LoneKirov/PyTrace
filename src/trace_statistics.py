@@ -14,7 +14,7 @@ class Time(Field):
         name = 'Start Time' if isStart else 'End Time'
         super(Time, self).__init__(name)
     def __call__(self, prev, cur, next):
-        return cur.sTime() if self.__isStart else cur.eTime() 
+        return (cur.sTime() if self.__isStart else cur.eTime()) / 1000000
 
 class ID(Field):
     def __init__(self, isStart):
@@ -46,19 +46,19 @@ class InterCmdTime(Field):
     def __init__(self):
         super(InterCmdTime, self).__init__('InterCmdTime')
     def __call__(self, prev, cur, next):
-        return 0 if prev is None else cur.sTime() - prev.sTime()
+        return (0 if prev is None else cur.sTime() - prev.eTime()) / 1000
 
 class CCT(Field):
     def __init__(self):
         super(CCT, self).__init__('CCT')
     def __call__(self, prev, cur, next):
-        return cur.eTime() - cur.sTime()
+        return (cur.eTime() - cur.sTime()) / 1000
 
 class qCCT(Field):
     def __init__(self):
         super(qCCT, self).__init__('qCCT')
     def __call__(self, prev, cur, next):
-        return cur.eTime() - prev.eTime() if prev != None else cur.eTime() - cur.sTime()
+        return (cur.eTime() - prev.eTime() if prev != None else cur.eTime() - cur.sTime()) / 1000
 
 class CommandType(Field):
     def __init__(self):
@@ -72,9 +72,17 @@ class qDepth(Field):
     def __call__(self, prev, cur, next):
         return cur.start().qDepth if cur.queued else 0
 
+class eqDepth(Field):
+    def __init__(self):
+        super(eqDepth, self).__init__('eqDepth')
+    def __call__(self, prev, cur, next):
+        return cur.end().eqDepth if cur.queued else 0
+
+
 ALL_FIELDS = [
         Time(True), Time(False), ID(True), ID(False), CommandType(),
-        InterCmdTime(), LBA(), Length(), FUA(), CCT(), qCCT(), qDepth()
+        InterCmdTime(), Length(), LBA(), FUA(), CCT(), qCCT(), qDepth(),
+        eqDepth()
     ]
 
 def commandsToStats(cmds, fields = ALL_FIELDS):

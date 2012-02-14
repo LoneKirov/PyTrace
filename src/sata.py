@@ -1,4 +1,5 @@
 from xgig import XgigCommand, ParsedCommand
+import logging
 
 COMMANDS = {
     'SMART': 0xB0,
@@ -65,8 +66,9 @@ class FISRegD2H(FISCommand):
         self.lba = parseLBA(self.eventData())
 
 class FISSetDeviceBits(FISCommand):
-    def __init__(self, event):
+    def __init__(self, event, eqDepth):
         super(FISSetDeviceBits, self).__init__(event)
+        self.eqDepth = eqDepth
         data = self.eventData()
         act = int(0)
         act = act | data[11]
@@ -117,6 +119,19 @@ class ReadFPDMAQueued(FISRegH2D):
         mask = 1 << 7
         self.fua = (self.eventData()[11] & mask) == mask
 
+class FlushCacheExt(FISRegH2D):
+    def __init__(self, event):
+        super(FlushCacheExt, self).__init__(event)
+        self.lba = 0
+        self.sectorCount = 0
+
+class DataSetManagement(FISRegH2D):
+    def __init__(self, event):
+        super(DataSetManagement, self).__init__(event)
+        self.lba = 0
+        self.sectorCount = 0
+
+
 def parseCommands(reader):
     commands = []
     inFlightQueued = {}
@@ -138,10 +153,11 @@ def parseCommands(reader):
                 smart = Smart(e)
                 feature = getAndAssertKnown(smart.feature, SMART)
                 if feature == 'READ_DATA':
-                    commands.append(ParsedCommand([ smart ], False, 0, True))
+                    #commands.append(ParsedCommand([ smart ], False, '-', True))
+                    pass
                 elif feature == 'RETURN_STATUS':
                     assert inFlightUnqueued is None
-                    inFlightUnqueued = ParsedCommand([ smart ], False, 0, False)
+                    inFlightUnqueued = ParsedCommand([ smart ], False, '-', False)
                     commands.append(inFlightUnqueued)
             elif command == 'WRITE_FPDMA_QUEUED':
                 write = WriteFPDMAQueued(e, len(inFlightQueued))
@@ -153,6 +169,18 @@ def parseCommands(reader):
                 inFlightQueued[read.queueTag] = ParsedCommand([ read ], True, 'R', False)
                 commands.append(inFlightQueued[read.queueTag])
                 lastQueued = read.queueTag
+            elif command == 'FLUSH_CACHE_EXT':
+                flush = FlushCacheExt(e)
+                assert inFlightUnqueued is None
+                inFlightUnqueued = ParsedCommand([ flush ], False, 'F', False)
+                commands.append(inFlightUnqueued)
+            elif command == 'DATA_SET_MANAGEMENT':
+                dsm = DataSetManagement(e)
+                assert inFlightUnqueued is None
+                inFlightUnqueued = ParsedCommand([ dsm ], False, 'F', False)
+                commands.append(inFlightUnqueued)
+            else:
+                logging.warn("Unhandled command %s (%s, %s)", command, e["metadata"]["id"], e["metadata"]["sTimestamp"])
 
         elif 'FIS_REG_D2H' == fisType:
             fisRegD2H = FISRegD2H(e)
@@ -164,13 +192,17 @@ def parseCommands(reader):
             elif lastQueued is not None:
                 inFlightQueued[lastQueued].events.append(fisRegD2H)
                 lastQueued = None
+            else:
+                logging.warn("Unhandled FIS_REG_D2H (%s, %s)", e["metadata"]["id"], e["metadata"]["sTimestamp"])
         elif 'FIS_DEV_BITS' == fisType:
-            bits = FISSetDeviceBits(e)
+            bits = FISSetDeviceBits(e, len(inFlightQueued) - 1)
             for act in bits.acts:
                 cmd = inFlightQueued[act]
                 del inFlightQueued[act]
                 cmd.events.append(bits)
                 cmd.done = True
+        else:
+            logging.warn("Unhandled fisType %s (%s, %s)", fisType, e["metadata"]["id"], e["metadata"]["sTimestamp"])
 
         commands.sort(key=lambda c: c.sTime())
         while len(commands) != 0:
