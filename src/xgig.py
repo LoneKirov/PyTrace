@@ -1,4 +1,4 @@
-class XgigCommand(object):
+class XgigEvent(object):
     def __init__(self, event):
         self._event = event
         self.sTime = event["metadata"]["sTimestamp"]
@@ -19,11 +19,12 @@ class XgigCommand(object):
         return self.event()["eventData"]
 
 class ParsedCommand(object):
-    def __init__(self, events=[], queued=False, cmdType=0, done=False):
+    def __init__(self, events=[], queued=False, cmdType=0, done=False, prevEvent=None):
         self.events = events
         self.queued = queued
         self.cmdType = cmdType
         self.done = done
+        self.prevEvent = prevEvent
 
     def start(self):
         return self.events[0]

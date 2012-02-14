@@ -46,7 +46,7 @@ class InterCmdTime(Field):
     def __init__(self):
         super(InterCmdTime, self).__init__('InterCmdTime')
     def __call__(self, prev, cur, next):
-        return round((0 if prev is None else cur.sTime() - prev.sTime()) / 1000, 6)
+        return round((0 if cur.prevEvent is None else cur.sTime() - cur.prevEvent.sTime) / 1000, 6)
 
 class CCT(Field):
     def __init__(self):

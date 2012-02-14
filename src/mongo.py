@@ -54,7 +54,7 @@ class MongoCaptureDatabase(object):
         cmd = copy.deepcopy(cmd)
         oEvents = cmd["events"]
         cmd["events"] = list(map(
-                lambda e: xgig.XgigCommand(self.getEventsCollection().find_one({"metadata.id" : e["eid"]})),
+                lambda e: xgig.XgigEvent(self.getEventsCollection().find_one({"metadata.id" : e["eid"]})),
                 oEvents))
         for i in range(len(oEvents)):
             cmd["events"][i].__dict__.update(**oEvents[i])
