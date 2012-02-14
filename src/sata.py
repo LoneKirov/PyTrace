@@ -153,8 +153,7 @@ def parseCommands(reader):
                 smart = Smart(e)
                 feature = getAndAssertKnown(smart.feature, SMART)
                 if feature == 'READ_DATA':
-                    #commands.append(ParsedCommand([ smart ], False, '-', True))
-                    pass
+                    logging.info("Ignoring SATA READ_DATA")
                 elif feature == 'RETURN_STATUS':
                     assert inFlightUnqueued is None
                     inFlightUnqueued = ParsedCommand([ smart ], False, '-', False)
