@@ -58,7 +58,7 @@ class qCCT(Field):
     def __init__(self):
         super(qCCT, self).__init__('qCCT')
     def __call__(self, prev, cur, next):
-        return round((cur.eTime() - prev.eTime() if prev != None else cur.eTime() - cur.sTime()) / 1000, 6)
+        return round((cur.eTime() - prev.eTime() if prev != None and cur.queued and cur.start().qDepth != 0 else cur.eTime() - cur.sTime()) / 1000, 6)
 
 class CommandType(Field):
     def __init__(self):
