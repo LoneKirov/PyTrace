@@ -35,10 +35,10 @@ class ParsedCommand(object):
     def eTime(self):
         return self.end().sTime
     def ack(self):
-        if queued:
+        if self.queued:
             assert len(self.events) == 3
             return self.events[1]
         else:
-            return None
+            return self.end()
     def ackTime(self):
         return self.ack().sTime

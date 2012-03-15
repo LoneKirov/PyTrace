@@ -48,11 +48,16 @@ class MongoCaptureDatabase(object):
         for e in cmd.events:
             del e._event
         cmd.events = list(map(lambda e: e.__dict__, cmd.events))
+        if cmd.prevEvent is not None:
+            del cmd.prevEvent._event
+            cmd.prevEvent = cmd.prevEvent.__dict__
         return cmd.__dict__
 
     def deserializeCommand(self, cmd):
         cmd = copy.deepcopy(cmd)
         oEvents = cmd["events"]
+        if cmd["prevEvent"] is not None:
+            cmd["prevEvent"] = xgig.XgigEvent(self.getEventsCollection().find_one({"metadata.id" : cmd["prevEvent"]["eid"]}))
         cmd["events"] = list(map(
                 lambda e: xgig.XgigEvent(self.getEventsCollection().find_one({"metadata.id" : e["eid"]})),
                 oEvents))
