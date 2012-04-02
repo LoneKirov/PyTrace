@@ -36,6 +36,10 @@ class MongoCaptureDatabase(object):
     def getCommandsCollection(self):
         return self.getDB()["%s_commands" % self.__captureName]
 
+    def transformCommands(self, cmds):
+        for cmd in cmds:
+            yield self.deserializeCommand(cmd)
+
     def importCommands(self, cmds):
         cmdsCollection = self.getCommandsCollection()
         cmdsCollection.drop()
