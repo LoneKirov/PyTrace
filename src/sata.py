@@ -1,4 +1,5 @@
 from xgig import XgigEvent, ParsedCommand
+from itertools import takewhile, dropwhile
 import logging
 
 COMMANDS = {
@@ -208,13 +209,9 @@ def parseCommands(reader):
             logging.warn("Unhandled fisType %s (%s, %s)", fisType, e["metadata"]["id"], e["metadata"]["sTimestamp"])
 
         commands.sort(key=lambda c: c.sTime())
-        while len(commands) != 0:
-            cmd = commands.pop(0)
-            if cmd.done:
-                yield cmd
-            else:
-                commands.append(cmd)
-                break
+        for c in takewhile(lambda c: c.done, commands):
+            yield c
+        commands[:] = list(dropwhile(lambda c: c.done, commands))
             
     commands.sort(key=lambda c: c.sTime())
     for cmd in commands:
