@@ -34,13 +34,13 @@ class FUA(Field):
     def __init__(self):
         super(FUA, self).__init__('FUA')
     def __call__(self, prev, cur, next):
-        return 'Y' if hasattr(cur.start(), "fua") and cur.start().fua else 'N'
+        return 'Y' if getattr(cur.start(), "fua", False) else 'N'
 
 class Length(Field):
     def __init__(self):
         super(Length, self).__init__('length')
     def __call__(self, prev, cur, next):
-        return cur.start().sectorCount if hasattr(cur.start(), 'sectorCount') else 0
+        return getattr(cur.start(), 'sectorCount', 0)
 
 class InterCmdTime(Field):
     def __init__(self):
@@ -77,11 +77,12 @@ class eqDepth(Field):
         super(eqDepth, self).__init__('eqDepth')
     def __call__(self, prev, cur, next):
         return cur.end().eqDepth if cur.queued else 0
+
 class Stream(Field):
     def __init__(self):
         super(Stream, self).__init__('Stream')
     def __call__(self, prev, cur, next):
-        return cur.stream if hasattr(cur, 'stream') else None
+        return getattr(cur, 'stream', None)
 
 
 
