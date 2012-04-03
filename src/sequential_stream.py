@@ -1,4 +1,5 @@
-from itertools import takewhile, zip_longest, filterfalse
+from itertools import takewhile, dropwhile
+from collections import defaultdict
 
 class Detector(object):
     def __init__(self, cmds, attrName = 'stream', tDelta = 1000):
@@ -6,35 +7,46 @@ class Detector(object):
         self.__tDelta = tDelta
         self.__cmds = cmds
         self.__nextStreamID = 0
+
+        self.__lbaXCmds = defaultdict(list)
+        self.__window = []
         pass
 
-    def __iter__(self):
-        inFlight = []
-        expired = []
-        issued = []
-
-        for cmd in self.__cmds:
-            issued.append(cmd)
-            def isExpired(x):
-                return (cmd.sTime() - x.eTime() > self.__tDelta * 1000) or hasattr(cmd, self.__attrName)
-            for e in list(filter(isExpired, inFlight)):
-                inFlight.remove(e)
-                expired.append(e)
-
-            expired.sort(key=lambda c: c.sTime())
-            for t in list(takewhile(lambda c: c[0] == c[1], zip(expired, issued))):
-                expired.remove(t[0])
-                issued.remove(t[0])
-                yield t[0]
-            for c in filter(lambda x: hasattr(x.start(), "sectorCount") and cmd.start().lba == x.start().lba + x.start().sectorCount, inFlight):
-                if hasattr(c, self.__attrName):
-                    setattr(cmd, self.__attrName, getattr(c, self.__attrName))
-                else:
-                    setattr(c, self.__attrName, self.__nextStreamID)
-                    setattr(cmd, self.__attrName, getattr(c, self.__attrName))
+    def assignStream(self, cmd):
+        self.__window.append(cmd)
+        if hasattr(cmd.start(), 'sectorCount'):
+            lba = cmd.start().lba
+            if lba in self.__lbaXCmds:
+                prev = self.__lbaXCmds[lba][0]
+                if not hasattr(prev, self.__attrName):
+                    setattr(prev, self.__attrName, self.__nextStreamID)
                     self.__nextStreamID += 1
-                break
-            inFlight.append(cmd)
+                setattr(cmd, self.__attrName, getattr(prev, self.__attrName))
+                self.removeLBAXCmd(prev)
+            nLBA = lba + cmd.start().sectorCount
+            self.__lbaXCmds[nLBA].append(cmd)
 
-        for c in issued:
+    def removeLBAXCmd(self, c):
+        if hasattr(c.start(), 'sectorCount'):
+            nLBA = c.start().lba + c.start().sectorCount
+            l = self.__lbaXCmds[nLBA]
+            if c in l:
+                l.remove(c)
+            if len(l) == 0:
+                del self.__lbaXCmds[nLBA]
+
+    def retire(self, cmd):
+        def isExpired(x):
+            return (cmd.sTime() - x.eTime() > self.__tDelta * 1000)
+        for c in takewhile(isExpired, self.__window):
+            self.removeLBAXCmd(c)
             yield c
+        self.__window[:] = list(dropwhile(isExpired, self.__window))
+
+    def __iter__(self):
+        for cmd in self.__cmds:
+            for r in self.retire(cmd):
+                yield r
+            self.assignStream(cmd)
+        for c in self.__window:
+                yield c
