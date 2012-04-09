@@ -7,6 +7,7 @@ COMMANDS = {
     'READ_FPDMA_QUEUED' : 0x60,
     'WRITE_FPDMA_QUEUED' : 0x61,
     'DATA_SET_MANAGEMENT' : 0x06,
+    'WRITE_DMA_EXT' : 0x35,
     'FLUSH_CACHE_EXT' : 0xEA
 }
 COMMANDS.update(dict((v,k) for k, v in COMMANDS.items()))
@@ -36,7 +37,7 @@ def getAndAssertKnown(v, m):
 
 class FISCommand(XgigEvent):
     def __init__(self, event):
-        super(FISCommand, self).__init__(event)
+        super().__init__(event)
         self.fisType = self.eventData()[4]
 
 def parseLBA(data):
@@ -57,18 +58,18 @@ def parseLBA(data):
 
 class FISRegH2D(FISCommand):
     def __init__(self, event):
-        super(FISRegH2D, self).__init__(event)
+        super().__init__(event)
         self.lba = parseLBA(self.eventData())
         self.command = self.eventData()[6]
 
 class FISRegD2H(FISCommand):
     def __init__(self, event):
-        super(FISRegD2H, self).__init__(event)
+        super().__init__(event)
         self.lba = parseLBA(self.eventData())
 
 class FISSetDeviceBits(FISCommand):
     def __init__(self, event, eqDepth):
-        super(FISSetDeviceBits, self).__init__(event)
+        super().__init__(event)
         self.eqDepth = eqDepth
         data = self.eventData()
         act = int(0)
@@ -87,12 +88,12 @@ class FISSetDeviceBits(FISCommand):
 
 class Smart(FISRegH2D):
     def __init__(self, event):
-        super(Smart, self).__init__(event)
+        super().__init__(event)
         self.feature = self.eventData()[7]
 
 class WriteFPDMAQueued(FISRegH2D):
     def __init__(self, event, qDepth):
-        super(WriteFPDMAQueued, self).__init__(event)
+        super().__init__(event)
         self.qDepth = qDepth
 
         data = self.eventData()
@@ -107,7 +108,7 @@ class WriteFPDMAQueued(FISRegH2D):
 
 class ReadFPDMAQueued(FISRegH2D):
     def __init__(self, event, qDepth):
-        super(ReadFPDMAQueued, self).__init__(event)
+        super().__init__(event)
         self.qDepth = qDepth
 
         data = self.eventData()
@@ -122,97 +123,114 @@ class ReadFPDMAQueued(FISRegH2D):
 
 class FlushCacheExt(FISRegH2D):
     def __init__(self, event):
-        super(FlushCacheExt, self).__init__(event)
+        super().__init__(event)
         self.lba = 0
         self.sectorCount = 0
 
 class DataSetManagement(FISRegH2D):
     def __init__(self, event):
-        super(DataSetManagement, self).__init__(event)
+        super().__init__(event)
         self.lba = 0
         self.sectorCount = 0
 
+class WriteDMAExt(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
 
-def parseCommands(reader):
-    commands = []
-    inFlightQueued = {}
-    lastQueued = None
-    inFlightUnqueued = None
-    prevEvent = None
+class Parser(object):
+    def __init__(self, events):
+        self.__events = events
+        self.__commands = []
+        self.__inFlightQueued = {}
+        self.__lastQueued = None
+        self.__inFlightUnqueued = None
+        self.__prevEvent = None
 
-    for e in reader:
-        if "sata" not in e:
-            continue
-        sata = e["sata"]
+    def __iter__(self):
+        for e in self.__events:
+            if "sata" not in e:
+                continue
+            sata = e["sata"]
 
-        fisType = sata["fisType"]
-        fisType = getAndAssertKnown(fisType, FIS_TYPES)
-        if 'FIS_REG_H2D' == fisType:
-            command = sata["command"]
-            command = getAndAssertKnown(command, COMMANDS)
+            fisType = sata["fisType"]
+            fisType = getAndAssertKnown(fisType, FIS_TYPES)
+            self.handle(fisType, e)
 
-            if command == 'SMART':
-                smart = Smart(e)
-                feature = getAndAssertKnown(smart.feature, SMART)
-                if feature == 'READ_DATA':
-                    logging.info("Ignoring SATA READ_DATA")
-                elif feature == 'RETURN_STATUS':
-                    assert inFlightUnqueued is None
-                    inFlightUnqueued = ParsedCommand(events=[ smart ], cmdType='-', prevEvent=prevEvent)
-                    commands.append(inFlightUnqueued)
-            elif command == 'WRITE_FPDMA_QUEUED':
-                write = WriteFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[write.queueTag] = ParsedCommand(events=[ write ], queued=True, cmdType='W', prevEvent=prevEvent)
-                commands.append(inFlightQueued[write.queueTag])
-                lastQueued = write.queueTag
-            elif command == 'READ_FPDMA_QUEUED':
-                read = ReadFPDMAQueued(e, len(inFlightQueued))
-                inFlightQueued[read.queueTag] = ParsedCommand(events=[ read ], queued=True, cmdType='R', prevEvent=prevEvent)
-                commands.append(inFlightQueued[read.queueTag])
-                lastQueued = read.queueTag
-            elif command == 'FLUSH_CACHE_EXT':
-                flush = FlushCacheExt(e)
-                assert inFlightUnqueued is None
-                inFlightUnqueued = ParsedCommand(events=[ flush ], cmdType='F', prevEvent=prevEvent)
-                commands.append(inFlightUnqueued)
-            elif command == 'DATA_SET_MANAGEMENT':
-                dsm = DataSetManagement(e)
-                assert inFlightUnqueued is None
-                inFlightUnqueued = ParsedCommand(events=[ dsm ], cmdType='-', prevEvent=prevEvent)
-                commands.append(inFlightUnqueued)
-            else:
-                logging.warn("Unhandled command %s (%s, %s)", command, e["metadata"]["id"], e["metadata"]["sTimestamp"])
-            prevEvent = XgigEvent(e)
-
-        elif 'FIS_REG_D2H' == fisType:
-            fisRegD2H = FISRegD2H(e)
-            if inFlightUnqueued is not None:
-                assert inFlightUnqueued.events[0].lba == fisRegD2H.lba
-                inFlightUnqueued.events.append(fisRegD2H)
-                inFlightUnqueued.done = True
-                inFlightUnqueued = None
-                prevEvent = XgigEvent(e)
-            elif lastQueued is not None:
-                inFlightQueued[lastQueued].events.append(fisRegD2H)
-                lastQueued = None
-            else:
-                logging.warn("Unhandled FIS_REG_D2H (%s, %s)", e["metadata"]["id"], e["metadata"]["sTimestamp"])
-        elif 'FIS_DEV_BITS' == fisType:
-            bits = FISSetDeviceBits(e, len(inFlightQueued) - 1)
-            for act in bits.acts:
-                cmd = inFlightQueued[act]
-                del inFlightQueued[act]
-                cmd.events.append(bits)
-                cmd.done = True
-            prevEvent = XgigEvent(e)
-        else:
-            logging.warn("Unhandled fisType %s (%s, %s)", fisType, e["metadata"]["id"], e["metadata"]["sTimestamp"])
-
-        commands.sort(key=lambda c: c.sTime())
-        for c in takewhile(lambda c: c.done, commands):
-            yield c
-        commands[:] = list(dropwhile(lambda c: c.done, commands))
+            self.__commands.sort(key=lambda c: c.sTime())
+            for c in takewhile(lambda c: c.done, self.__commands):
+                yield c
+            self.__commands[:] = list(dropwhile(lambda c: c.done, self.__commands))
             
-    commands.sort(key=lambda c: c.sTime())
-    for cmd in commands:
-        yield cmd
+        self.__commands.sort(key=lambda c: c.sTime())
+        for cmd in self.__commands:
+            yield cmd
+
+    def handle(self, t, e):
+        h = getattr(self, t, None)
+        self.LOGGER.warn("Unhandled %s (%s, %s)", t, e["metadata"]["id"], e["metadata"]["sTimestamp"]) if h is None else h(e)
+
+    def FIS_REG_H2D(self, e):
+        sata = e["sata"]
+        command = sata["command"]
+        command = getAndAssertKnown(command, COMMANDS)
+        self.handle(command, e)
+        self.__prevEvent = XgigEvent(e)
+
+    def SMART(self, e):
+        smart = Smart(e)
+        feature = getAndAssertKnown(smart.feature, SMART)
+        if feature == 'READ_DATA':
+            self.LOGGER.info("Ignoring SATA READ_DATA")
+        elif feature == 'RETURN_STATUS':
+            assert self.__inFlightUnqueued is None
+            self.__inFlightUnqueued = ParsedCommand(events=[ smart ], cmdType='-', prevEvent=self.__prevEvent)
+            self.__commands.append(self.__inFlightUnqueued)
+
+    def WRITE_FPDMA_QUEUED(self, e):
+        write = WriteFPDMAQueued(e, len(self.__inFlightQueued))
+        self.__inFlightQueued[write.queueTag] = ParsedCommand(events=[ write ], queued=True, cmdType='W', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightQueued[write.queueTag])
+        self.__lastQueued = write.queueTag
+
+    def READ_FPDMA_QUEUED(self, e):
+        read = ReadFPDMAQueued(e, len(self.__inFlightQueued))
+        self.__inFlightQueued[read.queueTag] = ParsedCommand(events=[ read ], queued=True, cmdType='R', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightQueued[read.queueTag])
+        self.__lastQueued = read.queueTag
+
+    def FLUSH_CACHE_EXT(self, e):
+        flush = FlushCacheExt(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ flush ], cmdType='F', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
+    def DATA_SET_MANAGEMENT(self, e):
+        dsm = DataSetManagement(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ dsm ], cmdType='-', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
+    def FIS_REG_D2H(self, e):
+        fisRegD2H = FISRegD2H(e)
+        if self.__inFlightUnqueued is not None:
+            assert self.__inFlightUnqueued.events[0].lba == fisRegD2H.lba
+            self.__inFlightUnqueued.events.append(fisRegD2H)
+            self.__inFlightUnqueued.done = True
+            self.__inFlightUnqueued = None
+            self.__prevEvent = XgigEvent(e)
+        elif self.__lastQueued is not None:
+            self.__inFlightQueued[self.__lastQueued].events.append(fisRegD2H)
+            self.__lastQueued = None
+        else:
+            self.LOGGER.warn("Unhandled FIS_REG_D2H (%s, %s)", e["metadata"]["id"], e["metadata"]["sTimestamp"])
+
+    def FIS_DEV_BITS(self, e):
+        bits = FISSetDeviceBits(e, len(self.__inFlightQueued) - 1)
+        for act in bits.acts:
+            cmd = self.__inFlightQueued[act]
+            del self.__inFlightQueued[act]
+            cmd.events.append(bits)
+            cmd.done = True
+        self.__prevEvent = XgigEvent(e)
+
+Parser.LOGGER = logging.getLogger(Parser.__name__)
