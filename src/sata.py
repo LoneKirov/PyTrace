@@ -8,7 +8,8 @@ COMMANDS = {
     'WRITE_FPDMA_QUEUED' : 0x61,
     'DATA_SET_MANAGEMENT' : 0x06,
     'WRITE_DMA_EXT' : 0x35,
-    'FLUSH_CACHE_EXT' : 0xEA
+    'FLUSH_CACHE_EXT' : 0xEA,
+    'IDENTIFY_DEVICE' : 0xEC
 }
 COMMANDS.update(dict((v,k) for k, v in COMMANDS.items()))
 
@@ -40,7 +41,7 @@ class FISCommand(XgigEvent):
         super().__init__(event)
         self.fisType = self.eventData()[4]
 
-def parseLBA(data):
+def parseFISLBA(data):
     lba = int(0)
     lba = lba | data[14]
     lba = lba << 8
@@ -55,17 +56,23 @@ def parseLBA(data):
     lba = lba | data[8]
     return lba
 
+def parseFISSectorCount(data):
+    count = int(0)
+    count |= data[17]
+    count <<= 8
+    count |= data[16]
+    return count
 
 class FISRegH2D(FISCommand):
     def __init__(self, event):
         super().__init__(event)
-        self.lba = parseLBA(self.eventData())
+        self.lba = parseFISLBA(self.eventData())
         self.command = self.eventData()[6]
 
 class FISRegD2H(FISCommand):
     def __init__(self, event):
         super().__init__(event)
-        self.lba = parseLBA(self.eventData())
+        self.lba = parseFISLBA(self.eventData())
 
 class FISSetDeviceBits(FISCommand):
     def __init__(self, event, eqDepth):
@@ -134,6 +141,11 @@ class DataSetManagement(FISRegH2D):
         self.sectorCount = 0
 
 class WriteDMAExt(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
+        self.sectorCount = parseFISSectorCount(self.eventData())
+
+def FISDMAAct(FISCommand):
     def __init__(self, event):
         super().__init__(event)
 
@@ -210,10 +222,16 @@ class Parser(object):
         self.__inFlightUnqueued = ParsedCommand(events=[ dsm ], cmdType='-', prevEvent=self.__prevEvent)
         self.__commands.append(self.__inFlightUnqueued)
 
+    def WRITE_DMA_EXT(self, e):
+        w = WriteDMAExt(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ w ], cmdType='W', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
     def FIS_REG_D2H(self, e):
         fisRegD2H = FISRegD2H(e)
         if self.__inFlightUnqueued is not None:
-            assert self.__inFlightUnqueued.events[0].lba == fisRegD2H.lba
+            #assert self.__inFlightUnqueued.events[0].lba == fisRegD2H.lba
             self.__inFlightUnqueued.events.append(fisRegD2H)
             self.__inFlightUnqueued.done = True
             self.__inFlightUnqueued = None
@@ -232,5 +250,20 @@ class Parser(object):
             cmd.events.append(bits)
             cmd.done = True
         self.__prevEvent = XgigEvent(e)
+
+    def FIS_DMA_ACT(self, e):
+        act = FISDMAAct(e)
+        if self.__inFlightUnqueued is not None:
+            self.__inFlightUnqueued.events.append(act)
+            self.__prevEvent = XgigEvent(e)
+        else:
+            self.LOGGER.warn("Unhandled FIS_DMA_ACT (%s, %s)", e["metadata"]["id"], e["metadata"]["sTimestamp"])
+
+    def IDENTIFY_DEVICE(self, e):
+        self.LOGGER.info("Ignoring SATA IDENTIFY_DEVICE")
+
+    def FIS_PIO_SETUP(self, e):
+        self.LOGGER.info("Ignoring SATA FIS_PIO_SETUP")
+
 
 Parser.LOGGER = logging.getLogger(Parser.__name__)
