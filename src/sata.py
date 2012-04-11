@@ -8,6 +8,7 @@ COMMANDS = {
     'WRITE_FPDMA_QUEUED' : 0x61,
     'DATA_SET_MANAGEMENT' : 0x06,
     'WRITE_DMA_EXT' : 0x35,
+    'READ_DMA_EXT' : 0x25,
     'FLUSH_CACHE_EXT' : 0xEA,
     'IDENTIFY_DEVICE' : 0xEC
 }
@@ -144,6 +145,14 @@ class WriteDMAExt(FISRegH2D):
     def __init__(self, event):
         super().__init__(event)
         self.sectorCount = parseFISSectorCount(self.eventData())
+        self.sectorCount = 65536 if self.sectorCount == 0 else self.sectorCount
+
+class ReadDMAExt(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
+        self.sectorCount = parseFISSectorCount(self.eventData())
+        self.sectorCount = 65536 if self.sectorCount == 0 else self.sectorCount
+
 
 def FISDMAAct(FISCommand):
     def __init__(self, event):
@@ -226,6 +235,12 @@ class Parser(object):
         w = WriteDMAExt(e)
         assert self.__inFlightUnqueued is None
         self.__inFlightUnqueued = ParsedCommand(events=[ w ], cmdType='W', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
+    def READ_DMA_EXT(self, e):
+        r = ReadDMAExt(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ r ], cmdType='R', prevEvent=self.__prevEvent)
         self.__commands.append(self.__inFlightUnqueued)
 
     def FIS_REG_D2H(self, e):
