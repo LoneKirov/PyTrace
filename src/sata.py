@@ -7,7 +7,9 @@ COMMANDS = {
     'READ_FPDMA_QUEUED' : 0x60,
     'WRITE_FPDMA_QUEUED' : 0x61,
     'DATA_SET_MANAGEMENT' : 0x06,
+    'WRITE_DMA' : 0xCA,
     'WRITE_DMA_EXT' : 0x35,
+    'READ_DMA' : 0xC8,
     'READ_DMA_EXT' : 0x25,
     'FLUSH_CACHE_EXT' : 0xEA,
     'IDENTIFY_DEVICE' : 0xEC
@@ -141,11 +143,25 @@ class DataSetManagement(FISRegH2D):
         self.lba = 0
         self.sectorCount = 0
 
+class WriteDMA(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
+        self.lba &= 0xFFFFFF
+        self.sectorCount = parseFISSectorCount(self.eventData())
+        self.sectorCount = 256 if self.sectorCount == 0 else self.sectorCount
+
 class WriteDMAExt(FISRegH2D):
     def __init__(self, event):
         super().__init__(event)
         self.sectorCount = parseFISSectorCount(self.eventData())
         self.sectorCount = 65536 if self.sectorCount == 0 else self.sectorCount
+
+class ReadDMA(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
+        self.lba &= 0xFFFFFF
+        self.sectorCount = parseFISSectorCount(self.eventData())
+        self.sectorCount = 256 if self.sectorCount == 0 else self.sectorCount
 
 class ReadDMAExt(FISRegH2D):
     def __init__(self, event):
@@ -231,10 +247,22 @@ class Parser(object):
         self.__inFlightUnqueued = ParsedCommand(events=[ dsm ], cmdType='-', prevEvent=self.__prevEvent)
         self.__commands.append(self.__inFlightUnqueued)
 
+    def WRITE_DMA(self, e):
+        w = WriteDMA(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ w ], cmdType='W', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
     def WRITE_DMA_EXT(self, e):
         w = WriteDMAExt(e)
         assert self.__inFlightUnqueued is None
         self.__inFlightUnqueued = ParsedCommand(events=[ w ], cmdType='W', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
+
+    def READ_DMA(self, e):
+        r = ReadDMA(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ r ], cmdType='R', prevEvent=self.__prevEvent)
         self.__commands.append(self.__inFlightUnqueued)
 
     def READ_DMA_EXT(self, e):
