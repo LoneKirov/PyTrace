@@ -12,7 +12,8 @@ COMMANDS = {
     'READ_DMA' : 0xC8,
     'READ_DMA_EXT' : 0x25,
     'FLUSH_CACHE_EXT' : 0xEA,
-    'IDENTIFY_DEVICE' : 0xEC
+    'IDENTIFY_DEVICE' : 0xEC,
+    'CHECK_POWER_MODE' : 0xE5
 }
 COMMANDS.update(dict((v,k) for k, v in COMMANDS.items()))
 
@@ -31,6 +32,7 @@ FIS_TYPES.update(dict((v,k) for k, v in FIS_TYPES.items()))
 
 SMART = {
     'READ_DATA' : 0xD0,
+    'SMART_READ_WARRANTY_FAILURE_THRESHOLDS' : 0xD1,
     'RETURN_STATUS' : 0xDA
 }
 SMART.update(dict((v,k) for k, v in SMART.items()))
@@ -169,6 +171,9 @@ class ReadDMAExt(FISRegH2D):
         self.sectorCount = parseFISSectorCount(self.eventData())
         self.sectorCount = 65536 if self.sectorCount == 0 else self.sectorCount
 
+class CheckPowerMode(FISRegH2D):
+    def __init__(self, event):
+        super().__init__(event)
 
 def FISDMAAct(FISCommand):
     def __init__(self, event):
@@ -218,6 +223,8 @@ class Parser(object):
         feature = getAndAssertKnown(smart.feature, SMART)
         if feature == 'READ_DATA':
             self.LOGGER.info("Ignoring SATA READ_DATA")
+        elif feature == 'SMART_READ_WARRANTY_FAILURE_THRESHOLDS':
+            self.LOGGER.info("Ignoring SATA SMART_READ_WARRANTY_FAILURE_THRESHOLDS")
         elif feature == 'RETURN_STATUS':
             assert self.__inFlightUnqueued is None
             self.__inFlightUnqueued = ParsedCommand(events=[ smart ], cmdType='-', prevEvent=self.__prevEvent)
@@ -274,7 +281,6 @@ class Parser(object):
     def FIS_REG_D2H(self, e):
         fisRegD2H = FISRegD2H(e)
         if self.__inFlightUnqueued is not None:
-            #assert self.__inFlightUnqueued.events[0].lba == fisRegD2H.lba
             self.__inFlightUnqueued.events.append(fisRegD2H)
             self.__inFlightUnqueued.done = True
             self.__inFlightUnqueued = None
@@ -308,5 +314,10 @@ class Parser(object):
     def FIS_PIO_SETUP(self, e):
         self.LOGGER.info("Ignoring SATA FIS_PIO_SETUP")
 
+    def CHECK_POWER_MODE(self, e):
+        p = CheckPowerMode(e)
+        assert self.__inFlightUnqueued is None
+        self.__inFlightUnqueued = ParsedCommand(events=[ p ], cmdType='-', prevEvent=self.__prevEvent)
+        self.__commands.append(self.__inFlightUnqueued)
 
 Parser.LOGGER = logging.getLogger(Parser.__name__)
