@@ -28,16 +28,30 @@ if __name__ == "__main__":
     if args.csv is not None:
         outputs.append(lambda cmds: commandsToStatCSV(args.csv, cmds, fields=statFields))
 
+    import matplotlib.pyplot as plt
     if args.plot is not None:
-        def plot(cmds):
-            import matplotlib.pyplot as plt
+        def plotOutputter(cmds):
+            from functools import reduce
+            from collections import defaultdict
             from numpy import fromiter
-            stats = tee(filter(lambda s: s['stream1000'] != -1, commandsToStats(cmds, fields=statFields)))
-            times = fromiter(map(lambda s: float(s['Start Time']), stats[0]), float)
-            streams = fromiter(map(lambda s: int(s['stream1000']), stats[1]), int)
-            print(plt.plot(times, streams, '.'))
-            plt.savefig(args.plot)
-        outputs.append(plot)
+            def plot(stats, key, subplot):
+                def accumulator(accum, s):
+                    accum[s[key]].append(s['Start Time'])
+                    return accum
+                streams = reduce(accumulator, stats, defaultdict(list))
+                plt.subplot(subplot)
+                for i, t in streams.items():
+                    plt.plot(t, [i for _ in range(len(t))], '.')
+            stats = tee(commandsToStats(cmds, fields=statFields), 5)
+            plot(stats[0], 'stream1', 321)
+            plot(stats[1], 'stream10', 322)
+            plot(stats[2], 'stream100', 323)
+            plot(stats[3], 'stream1000', 324)
+            plot(stats[4], 'stream10000', 325)
+        outputs.append(plotOutputter)
 
     for t in zip_longest(outputs, tee(commands, len(outputs))):
         t[0](t[1])
+
+    if args.plot is not None:
+        plt.savefig(args.plot)
