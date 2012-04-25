@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     outputs = []
 
-    statFields = [Time(True), LBA(), Length(), Stream('stream1'), Stream('stream10'), Stream('stream100'), Stream('stream1000'), Stream('stream10000'), Stream('stream100000')]
+    statFields = [Time(True), LBA(), Length(), Stream('stream10'), Stream('stream100'), Stream('stream1000'), Stream('stream10000'), Stream('stream100000')]
 
     if args.csv is not None:
         outputs.append(lambda cmds: commandsToStatCSV(args.csv, cmds, fields=statFields))
@@ -46,38 +46,44 @@ if __name__ == "__main__":
                     accum[s[key]].append(s['Start Time'])
                     return accum
                 streams = reduce(accumulator, stats, defaultdict(list))
-                del streams[-1]
                 ax = plt.subplot(rows, cols, ndx)
                 dur = key.replace('stream', '')
                 ax.set_title(dur + ' (ms) Streams', fontsize=5)
                 ax.set_ylabel('Stream ID', fontsize=5)
                 ax.set_xlabel('Time (sec)', fontsize=5)
                 for i, t in streams.items():
-                    plt.plot(t, [i for _ in range(len(t))], '.')
+                    plt.plot(t, [i for _ in range(len(t))], '.', markersize=2.0)
                 plt.setp(ax.get_xticklabels(), fontsize=4)
                 plt.setp(ax.get_yticklabels(), fontsize=4)
-                #del streams[-1]
+                del streams[-1]
                 ax = plt.subplot(rows, cols, ndx + 1)
                 ax.set_title(dur + ' (ms) Stream Lengths (commands)', fontsize=5)
-                ax.set_ylabel('Count', fontsize=5)
-                ax.set_xlabel('Number of Commands', fontsize=5)
-                plt.hist([ len(t) for _, t in streams.items() ], bins=100)
+                ax.set_ylabel('Number of Commands', fontsize=5)
+                ax.set_xlabel('Stream ID', fontsize=5)
+                plt.bar([ k for k, _ in streams.items() ], [ len(t) for _, t in streams.items() ])
                 plt.setp(ax.get_xticklabels(), fontsize=4)
                 plt.setp(ax.get_yticklabels(), fontsize=4)
                 ax = plt.subplot(rows, cols, ndx + 2)
                 ax.set_title(dur + ' (ms) Stream Durations', fontsize=5)
-                ax.set_ylabel('Count', fontsize=5)
-                ax.set_xlabel('Duration (sec)', fontsize=5)
-                plt.hist([ t[len(t) - 1] - t[0] for _, t in streams.items() ], bins=100)
+                ax.set_ylabel('Duration (sec)', fontsize=5)
+                ax.set_xlabel('Stream ID', fontsize=5)
+                plt.bar([ k for k, _ in streams.items() ], [ t[len(t) - 1] - t[0] for _, t in streams.items() ])
                 plt.setp(ax.get_xticklabels(), fontsize=4)
                 plt.setp(ax.get_yticklabels(), fontsize=4)
-            stats = tee(commandsToStats(cmds, fields=statFields), 6)
-            plot(stats[0], 'stream1', 6, 3, 1)
-            plot(stats[1], 'stream10', 6, 3, 4)
-            plot(stats[2], 'stream100', 6, 3, 7)
-            plot(stats[3], 'stream1000', 6, 3, 10)
-            plot(stats[4], 'stream10000', 6, 3, 13)
-            plot(stats[5], 'stream100000', 6, 3, 16)
+            stats = tee(commandsToStats(cmds, fields=statFields), 7)
+            ndx = 4
+            for v in zip_longest(stats, ['stream10', 'stream100', 'stream1000', 'stream10000', 'stream100000']):
+                if v[1] is not None:
+                    plot(v[0], v[1], 6, 3, ndx)
+                    ndx += 3
+            ax = plt.subplot(6, 3, 1)
+            ax.set_ylabel('LBA', fontsize=5)
+            from matplotlib.ticker import FormatStrFormatter
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%d'))
+            ax.set_xlabel('Time (sec)', fontsize=5)
+            plt.setp(ax.get_xticklabels(), fontsize=4)
+            plt.setp(ax.get_yticklabels(), fontsize=4)
+            plt.plot([s['Start Time'] for s in stats[7]], [s['LBA'] for s in stats[6]], '.', markersize=2.0)
         outputs.append(plotOutputter)
 
     for t in zip_longest(outputs, tee(commands, len(outputs))):

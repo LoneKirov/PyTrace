@@ -15,7 +15,7 @@ COMMANDS = {
     'IDENTIFY_DEVICE' : 0xEC,
     'CHECK_POWER_MODE' : 0xE5
 }
-COMMANDS.update(dict((v,k) for k, v in COMMANDS.items()))
+COMMANDS.update({ v : k for k, v in COMMANDS.items() })
 
 FIS_TYPES = {
     'UNKNOWN' : 0x00,
@@ -28,14 +28,14 @@ FIS_TYPES = {
     'FIS_PIO_SETUP' : 0x5F,
     'FIS_DEV_BITS' : 0xA1
 }
-FIS_TYPES.update(dict((v,k) for k, v in FIS_TYPES.items()))
+FIS_TYPES.update({ v : k for k, v in FIS_TYPES.items() } )
 
 SMART = {
     'READ_DATA' : 0xD0,
     'SMART_READ_WARRANTY_FAILURE_THRESHOLDS' : 0xD1,
     'RETURN_STATUS' : 0xDA
 }
-SMART.update(dict((v,k) for k, v in SMART.items()))
+SMART.update({ v : k for k, v in SMART.items() })
 
 def getAndAssertKnown(v, m):
     assert v in m, "Unknown value %s" % hex(v)
