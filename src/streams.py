@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     from json_reader import JsonReader
     from sata import Parser
-    from trace_statistics import commandsToStats, commandsToStatCSV, Time, LBA, Length, Stream
+    from command_statistics import commandsToStats, commandsToStatCSV, Time, LBA, Length, Stream
     from sequential_stream import Detector
     from itertools import tee, zip_longest, dropwhile, takewhile
 
@@ -75,6 +75,7 @@ if __name__ == "__main__":
             accum = { k : defaultdict(list) for k, _ in streamKeys.items() }
             accum['LBA'] = list()
             accum['Time'] = list()
+            accum['ID'] = list()
             streams = reduce(accumulator, commandsToStats(cmds, fields=statFields), accum)
           
             rows = 6
@@ -86,17 +87,19 @@ if __name__ == "__main__":
             del streams['LBA']
             del streams['Time']
             n = 4
-            for k,v in sorted(streamKeys.items()):
+            for k in sorted(streamKeys.keys()):
+                v = streamKeys[k]
                 plot(lambda: [plt.plot(t, [i for _ in range(len(t))], '.', markersize=2.0) for i, t in streams[k].items()],
                         subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
                 n += 1
-                plot(lambda: plt.bar([ k for k, _ in streams[k].items() ], [ len(t) for _, t in streams[k].items() ]),
+                ids = [ i for i, _ in streams[k].items() if i is not -1 ]
+                plot(lambda: plt.bar(ids, [ len(t) for i, t in streams[k].items() if i is not -1 ]),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (commands)', xlabel='Stream ID',
                         ylabel='Number of Commands')
                 n += 1
-                plot(lambda: plt.bar([ k for k, _ in streams[k].items() ], [ t[len(t) - 1] - t[0] for _, t in streams[k].items() ]),
-                        subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (commands)', xlabel='Stream ID',
-                        ylabel='Number of Commands')
+                plot(lambda: plt.bar(ids, [ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ]),
+                        subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (duration)', xlabel='Stream ID',
+                        ylabel='Duration (sec)')
                 n += 1
                 del streams[k]
         outputs.append(plotOutputter)
