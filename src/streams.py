@@ -37,6 +37,8 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
     if args.plot is not None:
+        from os.path import splitext
+        name, ext = splitext(args.plot)
         def plotOutputter(cmds):
             from matplotlib.ticker import FormatStrFormatter
             from functools import reduce
@@ -85,7 +87,7 @@ if __name__ == "__main__":
             accum['ID'] = list()
             streams = reduce(accumulator, commandsToStats(cmds, fields=statFields), accum)
           
-            rows = 6
+            rows = 1
             cols = 3
             n = 1
             def rwPlot():
@@ -101,12 +103,15 @@ if __name__ == "__main__":
             plot(lambda: plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='Write LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
+            plt.tight_layout()
+            plt.savefig('%s-%s%s' % (name, 'lba', ext))
+            plt.clf()
             del streams['rLBA']
             del streams['rTime']
             del streams['wLBA']
             del streams['wTime']
-            n = 4
             for k in sorted(streamKeys.keys()):
+                n = 1
                 v = streamKeys[k]
                 plot(lambda: [plt.plot(t, [i for _ in range(len(t))], '.', markersize=2.0) for i, t in streams[k].items()],
                         subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
@@ -119,13 +124,12 @@ if __name__ == "__main__":
                 plot(lambda: plt.bar(ids, [ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ]),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (duration)', xlabel='Stream ID',
                         ylabel='Duration (sec)')
-                n += 1
                 del streams[k]
+                plt.tight_layout()
+                plt.savefig('%s-%s%s' % (name, k, ext))
+                plt.clf()
+
         outputs.append(plotOutputter)
 
     for t in zip_longest(outputs, tee(commands, len(outputs))):
         t[0](t[1])
-
-    if args.plot is not None:
-        plt.tight_layout()
-        plt.savefig(args.plot)
