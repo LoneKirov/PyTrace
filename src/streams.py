@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     from json_reader import JsonReader
     from sata import Parser
-    from command_statistics import commandsToStats, commandsToStatCSV, Time, LBA, Length, Stream
+    from command_statistics import commandsToStats, commandsToStatCSV, Time, LBA, Length, Stream, CommandType
     from sequential_stream import Detector
     from itertools import tee, zip_longest, dropwhile, takewhile
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     outputs = []
 
-    statFields = [Time(True), LBA(), Length(), Stream('stream10'), Stream('stream100'), Stream('stream1000'), Stream('stream10000'), Stream('stream100000')]
+    statFields = [Time(True), LBA(), Length(), CommandType(), Stream('stream10'), Stream('stream100'), Stream('stream1000'), Stream('stream10000'), Stream('stream100000')]
 
     if args.csv is not None:
         outputs.append(lambda cmds: commandsToStatCSV(args.csv, cmds, fields=statFields))
@@ -65,27 +65,46 @@ if __name__ == "__main__":
             }
 
             def accumulator(accum, s):
-                accum['LBA'].append(s['LBA'])
                 t = s['Start Time']
-                accum['Time'].append(t)
+                lba = s['LBA']
+                if s['Cmd'] is 'R':
+                    accum['rLBA'].append(lba)
+                    accum['rTime'].append(t)
+                elif s['Cmd'] is 'W':
+                    accum['wLBA'].append(lba)
+                    accum['wTime'].append(t)
                 for k, _ in streamKeys.items():
                     accum[k][s[k]].append(s['Start Time'])
                 return accum
 
             accum = { k : defaultdict(list) for k, _ in streamKeys.items() }
-            accum['LBA'] = list()
-            accum['Time'] = list()
+            accum['rLBA'] = list()
+            accum['rTime'] = list()
+            accum['wLBA'] = list()
+            accum['wTime'] = list()
             accum['ID'] = list()
             streams = reduce(accumulator, commandsToStats(cmds, fields=statFields), accum)
           
             rows = 6
             cols = 3
             n = 1
-            plot(lambda: plt.plot(streams['Time'], streams['LBA'], '.', markersize=2.0),
+            def rwPlot():
+                plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0)
+                plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0)
+            plot(rwPlot, lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
+                    subplot=(rows, cols, n), title='LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
+            n += 1
+            plot(lambda: plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
-                    subplot=(rows, cols, n), title='LBA versus Time', xlabel='LBA', ylabel='Time (sec)')
-            del streams['LBA']
-            del streams['Time']
+                    subplot=(rows, cols, n), title='Read LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
+            n += 1
+            plot(lambda: plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0),
+                    lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
+                    subplot=(rows, cols, n), title='Write LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
+            del streams['rLBA']
+            del streams['rTime']
+            del streams['wLBA']
+            del streams['wTime']
             n = 4
             for k in sorted(streamKeys.keys()):
                 v = streamKeys[k]
