@@ -45,15 +45,15 @@ if __name__ == "__main__":
             from collections import defaultdict
             from numpy import fromiter
 
-            def plot(plotFn, customFmt=lambda ax: None, subplot=(1,1,1), title=None, xlabel=None, ylabel=None):
-                ax = plt.subplot(subplot[0], subplot[1], subplot[2])
+            def plot(fig, plotFn, customFmt=lambda ax: None, subplot=(1,1,1), title=None, xlabel=None, ylabel=None):
+                ax = fig.add_subplot(subplot[0], subplot[1], subplot[2])
                 if title is not None:
                     ax.set_title(title, fontsize=5)
                 if xlabel is not None:
                     ax.set_xlabel(xlabel, fontsize=5)
                 if ylabel is not None:
                     ax.set_ylabel(ylabel, fontsize=5)
-                plotFn()
+                plotFn(ax)
                 plt.setp(ax.get_xticklabels(), fontsize=4)
                 plt.setp(ax.get_yticklabels(), fontsize=4)
                 customFmt(ax)
@@ -90,44 +90,46 @@ if __name__ == "__main__":
             rows = 1
             cols = 3
             n = 1
-            def rwPlot():
-                plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0)
-                plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0)
-            plot(rwPlot, lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
+            def rwPlot(ax):
+                ax.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0)
+                ax.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0)
+            fig = plt.figure()
+            plot(fig, rwPlot, lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
             n += 1
-            plot(lambda: plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0),
+            plot(fig, lambda ax: ax.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='Read LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
             n += 1
-            plot(lambda: plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0),
+            plot(fig, lambda ax: ax.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='Write LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
-            plt.tight_layout()
-            plt.savefig('%s-%s%s' % (name, 'lba', ext))
-            plt.clf()
+            fig.tight_layout()
+            fig.savefig('%s-%s%s' % (name, 'lba', ext))
+            plt.close(fig)
             del streams['rLBA']
             del streams['rTime']
             del streams['wLBA']
             del streams['wTime']
             for k in sorted(streamKeys.keys()):
+                fig = plt.figure()
                 n = 1
                 v = streamKeys[k]
-                plot(lambda: [plt.plot(t, [i for _ in range(len(t))], '.', markersize=2.0) for i, t in streams[k].items()],
+                plot(fig, lambda ax: [ax.plot(t, [i for _ in range(len(t))], '.', markersize=2.0) for i, t in streams[k].items()],
                         subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
                 n += 1
                 ids = [ i for i, _ in streams[k].items() if i is not -1 ]
-                plot(lambda: plt.bar(ids, [ len(t) for i, t in streams[k].items() if i is not -1 ]),
+                plot(fig, lambda ax: ax.bar(ids, [ len(t) for i, t in streams[k].items() if i is not -1 ]),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (commands)', xlabel='Stream ID',
                         ylabel='Number of Commands')
                 n += 1
-                plot(lambda: plt.bar(ids, [ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ]),
+                plot(fig, lambda ax: ax.bar(ids, [ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ]),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (duration)', xlabel='Stream ID',
                         ylabel='Duration (sec)')
                 del streams[k]
-                plt.tight_layout()
-                plt.savefig('%s-%s%s' % (name, k, ext))
-                plt.clf()
+                fig.tight_layout()
+                fig.savefig('%s-%s%s' % (name, k, ext))
+                plt.close(fig)
 
         outputs.append(plotOutputter)
 
