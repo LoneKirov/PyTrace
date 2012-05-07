@@ -1,4 +1,8 @@
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    LOGGER = logging.getLogger(__name__)
+
     import argparse
 
     aparser = argparse.ArgumentParser(description='Detect sequential streams.')
@@ -43,10 +47,13 @@ if __name__ == "__main__":
             from matplotlib.ticker import FormatStrFormatter
             from functools import reduce
             from collections import defaultdict
-            from numpy import fromiter
+            from numpy import fromiter,array
+            import gc
 
             def plot(fig, plotFn, customFmt=lambda ax: None, subplot=(1,1,1), title=None, xlabel=None, ylabel=None):
+                LOGGER.info('Plotting %s' % title)
                 ax = fig.add_subplot(subplot[0], subplot[1], subplot[2])
+                ax.legend_ = None
                 if title is not None:
                     ax.set_title(title, fontsize=5)
                 if xlabel is not None:
@@ -85,7 +92,16 @@ if __name__ == "__main__":
             accum['wLBA'] = list()
             accum['wTime'] = list()
             accum['ID'] = list()
+            LOGGER.info('Accumulating')
             streams = reduce(accumulator, commandsToStats(cmds, fields=statFields), accum)
+            accum['rLBA'] = array(accum['rLBA'])
+            accum['rTime'] = array(accum['rTime'])
+            accum['wLBA'] = array(accum['wLBA'])
+            accum['wTime'] = array(accum['wTime'])
+            accum['ID'] = array(accum['ID'])
+            for k in sorted(streamKeys.keys()):
+                streams[k] = {i : array(t) for i, t in streams[k].items() }
+            gc.collect()
           
             rows = 1
             cols = 3
@@ -106,30 +122,42 @@ if __name__ == "__main__":
                     subplot=(rows, cols, n), title='Write LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
             fig.tight_layout()
             fig.savefig('%s-%s%s' % (name, 'lba', ext))
+            plt.cla()
+            plt.clf()
             plt.close(fig)
+            del fig
             del streams['rLBA']
             del streams['rTime']
             del streams['wLBA']
             del streams['wTime']
             for k in sorted(streamKeys.keys()):
+                gc.collect()
                 fig = plt.figure()
                 n = 1
                 v = streamKeys[k]
-                plot(fig, lambda ax: [ax.plot(t, [i for _ in range(len(t))], '.', markersize=2.0) for i, t in streams[k].items()],
+                plot(fig, lambda ax: [ax.plot(t, fromiter([i for _ in range(len(t))], int), '.', markersize=2.0) for i, t in streams[k].items()],
                         subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
                 n += 1
-                ids = [ i for i, _ in streams[k].items() if i is not -1 ]
-                plot(fig, lambda ax: ax.bar(ids, [ len(t) for i, t in streams[k].items() if i is not -1 ]),
+                gc.collect()
+                ids = fromiter([ i for i, _ in streams[k].items() if i is not -1 ], int)
+                plot(fig, lambda ax: ax.bar(ids, fromiter([ len(t) for i, t in streams[k].items() if i is not -1 ], int)),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (commands)', xlabel='Stream ID',
                         ylabel='Number of Commands')
                 n += 1
-                plot(fig, lambda ax: ax.bar(ids, [ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ]),
+                gc.collect()
+                plot(fig, lambda ax: ax.bar(ids, fromiter([ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ], int)),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (duration)', xlabel='Stream ID',
                         ylabel='Duration (sec)')
+                gc.collect()
                 del streams[k]
                 fig.tight_layout()
+                LOGGER.info('Saving %s' % ('%s-%s%s' % (name, k, ext)))
                 fig.savefig('%s-%s%s' % (name, k, ext))
                 plt.close(fig)
+                plt.cla()
+                plt.clf()
+                del fig
+                gc.collect()
 
         outputs.append(plotOutputter)
 
