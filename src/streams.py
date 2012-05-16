@@ -11,6 +11,8 @@ if __name__ == "__main__":
     aparser.add_argument('--plot', required=False, dest='plot', help='path to plot output file')
     aparser.add_argument('--after', required=False, dest='after', type=int, help='consider commands after')
     aparser.add_argument('--before', required=False, dest='before', type=int, help='consider commands before')
+    aparser.add_argument('--lbaLess', required=False, dest='lbaLess', type=int, help='consider commands with LBA less than')
+    aparser.add_argument('--lbaGreater', required=False, dest='lbaGreater', type=int, help='consider commands with LBA greater than')
 
     args = aparser.parse_args()
 
@@ -31,6 +33,11 @@ if __name__ == "__main__":
         commands = dropwhile(lambda c: c.sTime() / 1000000 < args.after, commands)
     if args.before is not None:
         commands = takewhile(lambda c: c.sTime() / 1000000 <= args.before, commands)
+    if args.lbaLess is not None:
+        commands = filter(lambda c: c.start().lba < args.lbaLess, commands)
+    if args.lbaGreater is not None:
+        commands = filter(lambda c: c.start().lba <= args.lbaGreater, commands)
+
 
     outputs = []
 
@@ -39,6 +46,8 @@ if __name__ == "__main__":
     if args.csv is not None:
         outputs.append(lambda cmds: commandsToStatCSV(args.csv, cmds, fields=statFields))
 
+    import matplotlib
+    matplotlib.use('svg')
     import matplotlib.pyplot as plt
     if args.plot is not None:
         from os.path import splitext
@@ -47,22 +56,22 @@ if __name__ == "__main__":
             from matplotlib.ticker import FormatStrFormatter
             from functools import reduce
             from collections import defaultdict
-            from numpy import fromiter,array
+            from numpy import fromiter,array,empty_like
             import gc
 
-            def plot(fig, plotFn, customFmt=lambda ax: None, subplot=(1,1,1), title=None, xlabel=None, ylabel=None):
+            def plot(plotFn, customFmt=lambda ax: None, subplot=(1,1,1), title=None, xlabel=None, ylabel=None):
                 LOGGER.info('Plotting %s' % title)
-                ax = fig.add_subplot(subplot[0], subplot[1], subplot[2])
+                ax = plt.subplot(subplot[0], subplot[1], subplot[2])
                 ax.legend_ = None
                 if title is not None:
-                    ax.set_title(title, fontsize=5)
+                    ax.set_title(title, fontsize=20)
                 if xlabel is not None:
-                    ax.set_xlabel(xlabel, fontsize=5)
+                    ax.set_xlabel(xlabel, fontsize=16)
                 if ylabel is not None:
-                    ax.set_ylabel(ylabel, fontsize=5)
-                plotFn(ax)
-                plt.setp(ax.get_xticklabels(), fontsize=4)
-                plt.setp(ax.get_yticklabels(), fontsize=4)
+                    ax.set_ylabel(ylabel, fontsize=16)
+                plotFn()
+                plt.setp(ax.get_xticklabels(), fontsize=10)
+                plt.setp(ax.get_yticklabels(), fontsize=10)
                 customFmt(ax)
 
             streamKeys = {
@@ -102,61 +111,55 @@ if __name__ == "__main__":
             for k in sorted(streamKeys.keys()):
                 streams[k] = {i : array(t) for i, t in streams[k].items() }
             gc.collect()
-          
+
+            def save(t):
+                plt.savefig('%s-%s%s' % (name, t, ext))
+                plt.cla()
+                plt.clf()
+         
             rows = 1
-            cols = 3
+            cols = 1
             n = 1
-            def rwPlot(ax):
-                ax.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0)
-                ax.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0)
-            fig = plt.figure()
-            plot(fig, rwPlot, lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
+            def rwPlot():
+                plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=3.0)
+                plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=3.0)
+            plot(rwPlot, lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
-            n += 1
-            plot(fig, lambda ax: ax.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=2.0),
+            save('lba')
+            plot(lambda: plt.plot(streams['rTime'], streams['rLBA'], 'b.', markersize=3.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='Read LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
-            n += 1
-            plot(fig, lambda ax: ax.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=2.0),
+            save('read_lba')
+            plot(lambda: plt.plot(streams['wTime'], streams['wLBA'], 'r.', markersize=3.0),
                     lambda ax: ax.yaxis.set_major_formatter(FormatStrFormatter('%d')),
                     subplot=(rows, cols, n), title='Write LBA versus Time', ylabel='LBA', xlabel='Time (sec)')
-            fig.tight_layout()
-            fig.savefig('%s-%s%s' % (name, 'lba', ext))
-            plt.cla()
-            plt.clf()
-            plt.close(fig)
-            del fig
+            save('write_lba')
             del streams['rLBA']
             del streams['rTime']
             del streams['wLBA']
             del streams['wTime']
             for k in sorted(streamKeys.keys()):
                 gc.collect()
-                fig = plt.figure()
-                n = 1
                 v = streamKeys[k]
-                plot(fig, lambda ax: [ax.plot(t, fromiter([i for _ in range(len(t))], int), '.', markersize=2.0) for i, t in streams[k].items()],
-                        subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
-                n += 1
+                def plotStreams():
+                    for i, t in streams[k].items():
+                        t2 = empty_like(t)
+                        t2.fill(i)
+                        plt.plot(t, t2, '.', markersize=3.0)
+                plot(plotStreams, subplot=(rows, cols, n), title=str(v) + 'ms Streams', xlabel='Time (sec)', ylabel='Stream ID')
+                save('%s_streams' % v)
                 gc.collect()
                 ids = fromiter([ i for i, _ in streams[k].items() if i is not -1 ], int)
-                plot(fig, lambda ax: ax.bar(ids, fromiter([ len(t) for i, t in streams[k].items() if i is not -1 ], int)),
+                plot(lambda: plt.bar(ids, fromiter([ len(t) for i, t in streams[k].items() if i is not -1 ], int)),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (commands)', xlabel='Stream ID',
                         ylabel='Number of Commands')
-                n += 1
+                save('%s_count' % v)
                 gc.collect()
-                plot(fig, lambda ax: ax.bar(ids, fromiter([ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ], int)),
+                plot(lambda: plt.bar(ids, fromiter([ t[len(t) - 1] - t[0] for i, t in streams[k].items() if i is not -1 ], int)),
                         subplot=(rows, cols, n), title=str(v) + 'ms Stream Lengths (duration)', xlabel='Stream ID',
                         ylabel='Duration (sec)')
-                gc.collect()
+                save('%s_duration' % v)
                 del streams[k]
-                fig.tight_layout()
-                LOGGER.info('Saving %s' % ('%s-%s%s' % (name, k, ext)))
-                fig.savefig('%s-%s%s' % (name, k, ext))
-                plt.close(fig)
-                plt.cla()
-                plt.clf()
-                del fig
                 gc.collect()
 
         outputs.append(plotOutputter)
