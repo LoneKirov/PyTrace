@@ -1,6 +1,6 @@
 import pymongo
 import copy
-import xgig
+from . import xgig
 
 class MongoCaptureDatabase(object):
     def __init__(self, dbName, captureName, username, password):

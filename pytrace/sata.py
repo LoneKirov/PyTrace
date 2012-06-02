@@ -1,4 +1,4 @@
-from xgig import XgigEvent, ParsedCommand
+from .xgig import XgigEvent, ParsedCommand
 from itertools import takewhile, dropwhile
 import logging
 
