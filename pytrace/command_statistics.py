@@ -78,18 +78,10 @@ class eqDepth(Field):
     def __call__(self, prev, cur, next):
         return cur.end().eqDepth if cur.queued else 0
 
-class Stream(Field):
-    def __init__(self, name='stream'):
-        super(Stream, self).__init__(name)
-    def __call__(self, prev, cur, next):
-        return getattr(cur, self.name(), -1)
-
-
-
 ALL_FIELDS = [
         Time(True), Time(False), ID(True), ID(False), CommandType(),
         InterCmdTime(), LBA(), Length(), FUA(), CCT(), qCCT(), qDepth(),
-        eqDepth(), Stream()
+        eqDepth()
     ]
 
 def commandsToStats(cmds, fields = ALL_FIELDS):
